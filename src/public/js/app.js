@@ -950,7 +950,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     `);
   }
 
+  // Credentials & domains are always pure Latin — Arabic text or ? means a question
+  function isWizardMetaQuestion(msg, step) {
+    if (step === 'confirm') return false;
+    return /[؀-ۿ٠-٩؟]/.test(msg) || // Arabic chars or Arabic ?
+           (/\?/.test(msg) && !/[a-f0-9]{10}/i.test(msg)); // English ? not inside a hex string
+  }
+
   async function handleWizardStep(msg) {
+    // If user is asking a question mid-wizard, answer it and stay in wizard
+    if (isWizardMetaQuestion(msg, connectWizard.step)) {
+      const stepCtx = {
+        domain:       `المستخدم يريد ربط متجر Shopify. نحن في خطوة: أنتظر domain المتجر (مثال: mystore.myshopify.com).`,
+        clientId:     `المستخدم يريد ربط متجر ${connectWizard.domain}. نحن في خطوة: أنتظر Client ID من Shopify Partners.`,
+        clientSecret: `المستخدم يريد ربط متجر ${connectWizard.domain}. نحن في خطوة: أنتظر Client Secret من Shopify Partners.`,
+      };
+      const stepRemind = {
+        domain:       '📍 لما تجهز، ابعتلي <strong>domain المتجر</strong> (مثال: <code>mystore</code> أو <code>mystore.myshopify.com</code>)',
+        clientId:     '📍 لما تجهز، ابعتلي <strong>Client ID</strong> من صفحة App setup في Shopify Partners.',
+        clientSecret: '📍 لما تجهز، ابعتلي <strong>Client Secret</strong> من نفس الصفحة.',
+      };
+      // Inject wizard context so AI understands the situation
+      homeChatHistory.push({ role: 'assistant', content: stepCtx[connectWizard.step] || '' });
+      await sendToHomeAI(msg);
+      if (stepRemind[connectWizard.step]) {
+        appendHomeMsg('ai', stepRemind[connectWizard.step]);
+      }
+      return;
+    }
+
     const typing = appendHomeTyping();
     await new Promise(r => setTimeout(r, 500));
     typing?.remove();
@@ -959,7 +987,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let domain = msg.trim().toLowerCase().replace(/\s/g, '');
       if (!domain.includes('.myshopify.com')) domain += '.myshopify.com';
       if (!/^[a-zA-Z0-9\-]+\.myshopify\.com$/.test(domain)) {
-        appendHomeMsg('ai', '❌ الـ domain مش صح. مثال: <strong>mystore.myshopify.com</strong>');
+        appendHomeMsg('ai', '❌ الـ domain مش صح. لازم يكون اسم المتجر بالإنجليزي زي <strong>mystore</strong>');
         return;
       }
       connectWizard.domain = domain;
@@ -976,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `);
     } else if (connectWizard.step === 'clientId') {
       if (msg.trim().length < 10) {
-        appendHomeMsg('ai', '❌ الـ Client ID مش صح — لازم يكون أطول. جرب تاني.');
+        appendHomeMsg('ai', '❌ Client ID مش صح — لازم يكون سلسلة حروف وأرقام طويلة من Shopify.');
         return;
       }
       connectWizard.clientId = msg.trim();
@@ -984,7 +1012,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       appendHomeMsg('ai', `<div class="text-sm">✅ Client ID محفوظ.</div><div class="text-sm mt-2">آخر حاجة — هاتلي <strong>Client Secret</strong> من نفس صفحة Client credentials.</div>`);
     } else if (connectWizard.step === 'clientSecret') {
       if (msg.trim().length < 10) {
-        appendHomeMsg('ai', '❌ الـ Client Secret مش صح — لازم يكون أطول. جرب تاني.');
+        appendHomeMsg('ai', '❌ Client Secret مش صح — لازم يكون سلسلة طويلة من Shopify.');
         return;
       }
       connectWizard.clientSecret = msg.trim();

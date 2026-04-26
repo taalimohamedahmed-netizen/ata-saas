@@ -434,6 +434,9 @@ router.post('/whatsapp', express.json(), async (req, res) => {
         }
       } catch (aiErr) {
         console.error('❌ AI reply error:', aiErr.message);
+        if (aiErr.response) {
+          console.error('   [outer] status:', aiErr.response.status, '| data:', JSON.stringify(aiErr.response.data));
+        }
       }
     }
 

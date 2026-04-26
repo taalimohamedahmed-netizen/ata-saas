@@ -527,6 +527,10 @@ app.listen(PORT, () => {
   ║   Health:  http://localhost:${PORT}/health${' '.repeat(Math.max(0, 9 - String(PORT).length))}║
   ╚══════════════════════════════════════════╝
   `);
+  console.log(`🔑 OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'SET (' + process.env.OPENROUTER_API_KEY.slice(0,8) + '...)' : 'MISSING'}`);
+  console.log(`📱 WHATSAPP_PHONE_NUMBER_ID: ${process.env.WHATSAPP_PHONE_NUMBER_ID ? 'SET' : 'MISSING'}`);
+  console.log(`🔐 WHATSAPP_ACCESS_TOKEN: ${process.env.WHATSAPP_ACCESS_TOKEN ? 'SET (' + process.env.WHATSAPP_ACCESS_TOKEN.slice(0,8) + '...)' : 'MISSING'}`);
+  console.log(`🏷️  Build v3 — 2026-04-26`);
 });
 
 module.exports = app;

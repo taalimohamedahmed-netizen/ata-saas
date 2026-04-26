@@ -88,7 +88,7 @@ router.get('/auth/callback', async (req, res) => {
     const nonceData = nonceStore.get(state);
     if (!nonceData) {
       console.error('❌ Invalid or expired nonce');
-      return res.redirect('/?error=Invalid+or+expired+state+parameter');
+      return res.redirect('/dashboard.html?error=Invalid+or+expired+state+parameter');
     }
 
     // Consume the nonce (one-time use)
@@ -97,7 +97,7 @@ router.get('/auth/callback', async (req, res) => {
 
     // --- Step 2: Validate shop domain ---
     if (!shop || !isValidShopDomain(shop)) {
-      return res.redirect('/?error=Invalid+shop+domain');
+      return res.redirect('/dashboard.html?error=Invalid+shop+domain');
     }
 
     // --- Step 3: Exchange authorization code for permanent access token ---

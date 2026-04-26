@@ -90,7 +90,7 @@
 
       // Already logged in? go to dashboard
       const { data: { session } } = await client.auth.getSession();
-      if (session) { window.location.href = '/'; return; }
+      if (session) { window.location.href = '/dashboard.html'; return; }
 
       document.getElementById('auth-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -114,14 +114,14 @@
               }
               return;
             }
-            window.location.href = '/';
+            window.location.href = '/dashboard.html';
           } else {
             const { data, error } = await client.auth.signUp({ email, password });
             if (error) throw error;
             if (data?.user && !data?.session) {
               showSuccess('Account created! Check your email inbox for a confirmation link, then sign in.');
             } else if (data?.session) {
-              window.location.href = '/';
+              window.location.href = '/dashboard.html';
             } else {
               showSuccess('Account created! Check your email to confirm, then sign in.');
             }

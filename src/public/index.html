@@ -3,595 +3,195 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ATA SaaS — AI-Powered Shopify Dashboard</title>
-  <link rel="stylesheet" href="/css/styles.css">
+  <title>ATA Project — Shopify Automation Agency</title>
+  <link rel="stylesheet" href="/css/agency.css">
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
-<div class="app-shell">
-
-  <!-- ══════════ LEFT ICON NAV ══════════ -->
-  <nav class="left-nav" id="left-nav">
-    <div class="left-nav-logo"><i class="ph-bold ph-robot"></i></div>
-
-    <button class="left-nav-item active" id="nav-home-btn" data-tip="Brands">
-      <i class="ph-bold ph-storefront"></i><span class="nav-lbl">Brands</span>
-    </button>
-    <button class="left-nav-item" id="nav-inbox-btn" data-tip="Inbox" style="display:none;">
-      <i class="ph-bold ph-tray"></i><span class="nav-lbl">Inbox</span>
-    </button>
-    <button class="left-nav-item" id="nav-orders-btn" data-tip="Orders" style="display:none;">
-      <i class="ph-bold ph-shopping-cart"></i><span class="nav-lbl">Orders</span>
-    </button>
-    <button class="left-nav-item" id="nav-products-btn" data-tip="Products" style="display:none;">
-      <i class="ph-bold ph-package"></i><span class="nav-lbl">Products</span>
-    </button>
-    <button class="left-nav-item" id="nav-customers-btn" data-tip="Customers" style="display:none;">
-      <i class="ph-bold ph-users"></i><span class="nav-lbl">Customers</span>
-    </button>
-    <button class="left-nav-item" id="nav-chat-btn" data-tip="AI Chat" style="display:none;">
-      <i class="ph-bold ph-chats"></i><span class="nav-lbl">AI Chat</span>
-    </button>
-    <button class="left-nav-item" id="nav-whatsapp-btn" data-tip="WhatsApp" style="display:none;">
-      <i class="ph-bold ph-whatsapp-logo"></i><span class="nav-lbl">WA</span>
-    </button>
-
-    <div class="left-nav-spacer"></div>
-    <div class="left-nav-divider"></div>
-
-    <button class="left-nav-item" id="logout-btn" data-tip="Logout">
-      <i class="ph-bold ph-sign-out"></i><span class="nav-lbl">Logout</span>
-    </button>
-  </nav>
-
-  <!-- ══════════ MAIN CONTENT ══════════ -->
-  <div class="app-content">
-
-    <!-- Top Navbar -->
-    <nav class="navbar">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <a href="/" class="navbar-brand" id="nav-brand-link">
-          <div class="navbar-logo"><i class="ph-bold ph-robot"></i></div>
-          <div class="navbar-title">ATA <span>SaaS</span></div>
-        </a>
-        <span id="brand-nav-label" style="font-size:13px;color:var(--accent);font-weight:600;display:none;"></span>
+  <!-- Header -->
+  <header class="header">
+    <div class="container nav">
+      <a href="/" class="logo">
+        <i class="ph-bold ph-robot"></i> ATA <span>Project</span>
+      </a>
+      <div class="nav-links">
+        <a href="#philosophy">Philosophy</a>
+        <a href="#packages">Packages</a>
+        <a href="#stack">Tech Stack</a>
+        <a href="/login.html" class="btn btn-primary" style="padding: 6px 16px;">SaaS Login</a>
       </div>
-      <div class="navbar-right">
-        <button id="back-to-home-btn" class="btn btn-secondary btn-sm" style="display:none;">
-          <i class="ph-bold ph-arrow-left"></i> All Brands
-        </button>
-        <div class="navbar-status">
-          <div class="dot"></div>
-          <span id="nav-user-email">Loading...</span>
-        </div>
-      </div>
-    </nav>
-
-    <!-- ══════════ VIEW: HOME ══════════ -->
-    <div id="view-home">
-      <div class="home-centered-layout">
-
-        <!-- Hero Chat -->
-        <div class="home-chat-section">
-          <div class="home-hero-text">
-            <h1>ATA <span>SaaS</span> AI Gateway</h1>
-            <p>Better management, better stability. Ask anything about your Shopify stores.</p>
-          </div>
-
-          <div class="home-chat-panel collapsed" id="home-chat-panel">
-            <div class="home-chat-expanded-content" id="home-chat-expanded-content">
-              <div class="home-chat-header">
-                <div class="home-chat-header-left">
-                  <div class="home-chat-avatar">
-                    <i class="ph-bold ph-robot" style="color:white;font-size:15px;"></i>
-                  </div>
-                  <div>
-                    <div class="home-chat-title">AI Assistant</div>
-                    <div class="home-chat-subtitle">اسأل عن أي براند</div>
-                  </div>
-                </div>
-                <div class="home-chat-header-right">
-                  <select id="home-chat-store-select" class="form-input home-chat-store-select">
-                    <option value="">— اختار براند —</option>
-                  </select>
-                  <button id="close-chat-btn" class="btn btn-secondary btn-sm" style="width:30px;height:30px;padding:0;">
-                    <i class="ph-bold ph-x"></i>
-                  </button>
-                </div>
-              </div>
-              <div id="home-chat-messages" class="home-chat-messages">
-                <div class="chat-msg-ai">
-                  <div class="chat-bubble-ai">مرحباً! 👋 اختار البراند من فوق وابدأ تسأل عن أوردراتك، منتجاتك، أو عملائك.</div>
-                </div>
-              </div>
-            </div>
-            <div class="home-chat-input-bar">
-              <input type="text" id="home-chat-input" class="form-input chat-pill-input" placeholder="اسأل عن الأوردرات، المنتجات، العملاء..." autocomplete="off">
-              <button id="home-chat-send-btn" class="btn btn-primary chat-pill-btn">
-                <span class="btn-text"><i class="ph-bold ph-paper-plane-tilt"></i></span>
-                <div class="spinner"></div>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Brands Grid -->
-        <div class="home-brands-section">
-          <div class="home-brands-header">
-            <div>
-              <h2 class="home-brands-title">Your Brands</h2>
-              <p class="home-brands-subtitle">Click a brand to manage orders, products & customers</p>
-            </div>
-            <button id="open-connect-modal-btn" class="btn btn-primary btn-sm">
-              <i class="ph-bold ph-plus"></i> Connect Store
-            </button>
-          </div>
-          <div id="brand-cards-container" class="home-brands-grid"></div>
-        </div>
-
-      </div>
-    </div><!-- /view-home -->
-
-    <!-- ══════════ VIEW: BRAND DASHBOARD ══════════ -->
-    <div id="view-brand">
-
-      <!-- Brand Header Bar -->
-      <div class="brand-view-header">
-        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-          <div id="bv-avatar" style="width:34px;height:34px;background:var(--accent-grad);border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;color:white;font-size:15px;"></div>
-          <div>
-            <div id="bv-domain" style="font-weight:700;font-size:14px;color:var(--text);"></div>
-            <div id="bv-synced" style="font-size:11px;color:var(--text-3);"></div>
-          </div>
-        </div>
-        <div style="display:flex;gap:28px;margin:0 auto;">
-          <div style="text-align:center;">
-            <div id="bv-stat-products" style="font-size:17px;font-weight:700;color:var(--text);">—</div>
-            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;">Products</div>
-          </div>
-          <div style="text-align:center;">
-            <div id="bv-stat-orders" style="font-size:17px;font-weight:700;color:var(--text);">—</div>
-            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;">Orders</div>
-          </div>
-          <div style="text-align:center;">
-            <div id="bv-stat-customers" style="font-size:17px;font-weight:700;color:var(--text);">—</div>
-            <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;">Customers</div>
-          </div>
-        </div>
-        <div style="flex-shrink:0;">
-          <button id="bv-full-sync-btn" class="btn btn-primary btn-sm">
-            <i class="ph-bold ph-database-zap"></i>
-            <span id="bv-full-sync-label">Sync Data</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Tab Bar (hidden — tabs driven by left nav) -->
-      <div class="tab-bar" style="display:none;">
-        <button class="tab-btn active" data-tab="orders">Orders</button>
-        <button class="tab-btn" data-tab="products">Products</button>
-        <button class="tab-btn" data-tab="customers">Customers</button>
-        <button class="tab-btn" data-tab="chat">AI Chat</button>
-        <button class="tab-btn" data-tab="whatsapp">WhatsApp</button>
-        <button class="tab-btn" data-tab="inbox">Inbox</button>
-      </div>
-
-      <div class="brand-view-content">
-
-        <!-- TAB: Orders -->
-        <div id="tab-orders" class="tab-content">
-          <!-- WhatsApp status card -->
-          <div id="wa-card" class="section-card" style="margin-bottom:18px;">
-            <div class="section-header" style="padding:14px 18px;">
-              <h3><i class="ph-bold ph-whatsapp-logo" style="color:#25d366;"></i> WhatsApp Confirmation</h3>
-              <span id="wa-status-badge" style="font-size:11px;padding:3px 10px;border-radius:100px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);">⚙️ Setup Required</span>
-            </div>
-            <div style="padding:10px 18px 14px;font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span>Webhook URL:</span>
-              <code id="webhook-url-display" style="background:var(--surface-2);padding:2px 8px;border-radius:4px;color:var(--accent);font-size:12px;border:1px solid var(--border);">loading...</code>
-              <button onclick="copyWebhookUrl(this)" style="background:none;border:none;cursor:pointer;color:var(--text-3);"><i class="ph-bold ph-copy" style="font-size:13px;"></i></button>
-              <span style="color:var(--border);">|</span>
-              <span>Topic: <code style="background:var(--surface-2);padding:2px 6px;border-radius:4px;border:1px solid var(--border);">orders/create</code></span>
-              <a href="#" id="wa-configure-link" style="color:var(--accent);font-size:12px;margin-left:4px;">Configure WhatsApp →</a>
-            </div>
-          </div>
-
-          <div class="section-card">
-            <div class="section-header">
-              <h3><i class="ph-fill ph-shopping-cart" style="color:var(--accent);"></i> Orders</h3>
-            </div>
-            <div id="orders-loading" style="text-align:center;padding:32px;color:var(--text-3);font-size:13px;">Loading...</div>
-            <div style="overflow-x:auto;">
-              <table class="stores-table" id="orders-table" style="display:none;">
-                <thead><tr><th>#Order</th><th>Customer</th><th>Email</th><th>Total</th><th>Payment</th><th>Fulfillment</th><th>Date</th></tr></thead>
-                <tbody id="orders-tbody"></tbody>
-              </table>
-            </div>
-            <div class="empty-state" id="orders-empty" style="display:none;">
-              <i class="ph-thin ph-shopping-cart empty-state-icon"></i><h3>No orders yet</h3>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB: Products -->
-        <div id="tab-products" class="tab-content" style="display:none;">
-          <div class="section-card">
-            <div class="section-header">
-              <h3><i class="ph-fill ph-package" style="color:var(--accent);"></i> Products</h3>
-            </div>
-            <div id="products-loading" style="text-align:center;padding:32px;color:var(--text-3);font-size:13px;">Loading...</div>
-            <div style="overflow-x:auto;">
-              <table class="stores-table" id="products-table" style="display:none;">
-                <thead><tr><th>Image</th><th>Title</th><th>Vendor</th><th>Type</th><th>Price</th><th>Inventory</th><th>Status</th></tr></thead>
-                <tbody id="products-tbody"></tbody>
-              </table>
-            </div>
-            <div class="empty-state" id="products-empty" style="display:none;">
-              <i class="ph-thin ph-package empty-state-icon"></i><h3>No products yet</h3>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB: Customers -->
-        <div id="tab-customers" class="tab-content" style="display:none;">
-          <div class="section-card">
-            <div class="section-header">
-              <h3><i class="ph-fill ph-users" style="color:var(--accent);"></i> Customers</h3>
-            </div>
-            <div id="customers-loading" style="text-align:center;padding:32px;color:var(--text-3);font-size:13px;">Loading...</div>
-            <div style="overflow-x:auto;">
-              <table class="stores-table" id="customers-table" style="display:none;">
-                <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Orders</th><th>Total Spent</th></tr></thead>
-                <tbody id="customers-tbody"></tbody>
-              </table>
-            </div>
-            <div class="empty-state" id="customers-empty" style="display:none;">
-              <i class="ph-thin ph-users empty-state-icon"></i><h3>No customers yet</h3>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB: AI Chat -->
-        <div id="tab-chat" class="tab-content" style="display:none;">
-          <div class="brand-chat-card">
-            <div class="brand-chat-header">
-              <div class="brand-chat-avatar">
-                <i class="ph-bold ph-robot" style="color:white;font-size:14px;"></i>
-              </div>
-              <div>
-                <div style="font-weight:700;font-size:14px;color:var(--text);">AI Assistant</div>
-                <div id="brand-chat-subtitle" style="font-size:11px;color:var(--text-3);"></div>
-              </div>
-            </div>
-            <div id="brand-chat-messages">
-              <div class="chat-msg-ai">
-                <div class="chat-bubble-ai">مرحباً! اسألني أي سؤال عن هذا البراند. 🚀</div>
-              </div>
-            </div>
-            <div class="brand-chat-input-bar">
-              <input type="text" id="brand-chat-input" class="form-input" placeholder="اسأل عن الأوردرات، المنتجات، العملاء..." autocomplete="off">
-              <button id="brand-chat-send-btn" class="btn btn-primary" style="flex-shrink:0;">
-                <span class="btn-text"><i class="ph-bold ph-paper-plane-tilt"></i></span>
-                <div class="spinner"></div>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB: WhatsApp Settings -->
-        <div id="tab-whatsapp" class="tab-content" style="display:none;">
-
-          <!-- Webhook Setup Card -->
-          <div class="section-card" style="max-width:580px;margin-bottom:16px;">
-            <div class="section-header">
-              <h3><i class="ph-bold ph-link" style="color:var(--accent);"></i> Webhook Setup</h3>
-              <span style="font-size:11px;color:var(--text-3);">عشان تستلم ردود العملاء</span>
-            </div>
-            <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-              <form id="webhook-config-form" style="display:flex;flex-direction:column;gap:14px;">
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label">Public URL (ngrok / domain)</label>
-                  <input type="text" id="wh-app-url" class="form-input" placeholder="https://abc123.ngrok-free.app">
-                  <div class="form-hint"><i class="ph ph-info"></i> شغّل ngrok واحط الـ URL هنا</div>
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label">Verify Token</label>
-                  <input type="text" id="wh-verify-token" class="form-input" placeholder="ata-saas-verify-2024">
-                  <div class="form-hint"><i class="ph ph-info"></i> اكتب أي كلمة سر وحطها في Meta</div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm" id="wh-save-btn" style="align-self:flex-start;">
-                  <span class="btn-text"><i class="ph-bold ph-floppy-disk"></i> Save</span>
-                  <div class="spinner"></div>
-                </button>
-              </form>
-
-              <!-- Generated URLs to copy -->
-              <div id="wh-urls-box" style="display:none;padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);">
-                <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">حط دول في Meta → Webhook</div>
-                <div style="margin-bottom:8px;">
-                  <div style="font-size:11px;color:var(--text-3);margin-bottom:3px;">Callback URL</div>
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <code id="wh-callback-url" style="flex:1;font-size:12px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);word-break:break-all;"></code>
-                    <button onclick="copyText('wh-callback-url',this)" class="btn btn-secondary btn-sm" style="flex-shrink:0;"><i class="ph-bold ph-copy"></i></button>
-                  </div>
-                </div>
-                <div>
-                  <div style="font-size:11px;color:var(--text-3);margin-bottom:3px;">Verify Token</div>
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    <code id="wh-verify-display" style="flex:1;font-size:12px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--green);"></code>
-                    <button onclick="copyText('wh-verify-display',this)" class="btn btn-secondary btn-sm" style="flex-shrink:0;"><i class="ph-bold ph-copy"></i></button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="section-card" style="max-width:580px;">
-            <div class="section-header">
-              <h3><i class="ph-bold ph-whatsapp-logo" style="color:#25d366;"></i> WhatsApp Settings</h3>
-            </div>
-            <div style="padding:20px;">
-              <form id="wa-settings-form" style="display:flex;flex-direction:column;gap:14px;">
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label">Phone Number ID</label>
-                  <input type="text" id="wa-phone-id" class="form-input" placeholder="947551981784897">
-                  <div class="form-hint"><i class="ph ph-info"></i> Meta → WhatsApp → API Setup</div>
-                </div>
-                <div class="form-group" style="margin-bottom:0;">
-                  <label class="form-label">Access Token</label>
-                  <input type="password" id="wa-token" class="form-input" placeholder="EAAxxxxxxxx...">
-                  <div class="form-hint"><i class="ph ph-info"></i> Generate token in Meta → API Setup</div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                  <div class="form-group" style="margin-bottom:0;">
-                    <label class="form-label">Template Name</label>
-                    <input type="text" id="wa-template-name" class="form-input" placeholder="order_confirmation">
-                  </div>
-                  <div class="form-group" style="margin-bottom:0;">
-                    <label class="form-label">Language</label>
-                    <select id="wa-template-lang" class="form-input">
-                      <option value="ar">ar (Arabic)</option>
-                      <option value="en_US">en_US (English)</option>
-                      <option value="ar_EG">ar_EG (Egypt)</option>
-                    </select>
-                  </div>
-                </div>
-                <div style="padding:14px 16px;background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);">
-                  <div style="font-size:11px;font-weight:600;color:var(--text-3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">Template Preview</div>
-                  <div style="font-size:13px;line-height:1.8;direction:rtl;text-align:right;color:var(--text);">
-                    مرحباً <strong>{{1}}</strong>! 🎉<br>
-                    تم تأكيد طلبك رقم <strong>{{2}}</strong>.<br>
-                    الإجمالي: <strong>{{3}}</strong><br>
-                    شكراً لتسوقك معنا!
-                  </div>
-                </div>
-                <button type="submit" class="btn btn-primary" id="wa-save-btn" style="justify-content:center;">
-                  <span class="btn-text"><i class="ph-bold ph-floppy-disk"></i> Save Settings</span>
-                  <div class="spinner"></div>
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <!-- Test Message Card -->
-          <div class="section-card" style="max-width:580px;margin-top:16px;">
-            <div class="section-header">
-              <h3><i class="ph-bold ph-flask" style="color:var(--accent);"></i> Test Automation</h3>
-              <span style="font-size:11px;color:var(--text-3);">بعت رسالة تجربة وشوفها في الـ Inbox</span>
-            </div>
-            <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">Phone Number (recipient)</label>
-                <div style="display:flex;gap:8px;">
-                  <input type="text" id="wa-test-phone" class="form-input" placeholder="201000732037" style="flex:1;">
-                  <button id="wa-test-btn" class="btn btn-primary" style="flex-shrink:0;">
-                    <span class="btn-text"><i class="ph-bold ph-paper-plane-tilt"></i> Send Test</span>
-                    <div class="spinner"></div>
-                  </button>
-                </div>
-                <div class="form-hint"><i class="ph ph-info"></i> الرقم بدون + — لازم يكون مضاف في Meta كـ recipient</div>
-              </div>
-              <div id="wa-test-result" style="display:none;padding:12px 14px;border-radius:var(--radius-md);font-size:13px;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB: Inbox — Gorgias style 3-panel -->
-        <div id="tab-inbox" class="tab-content" style="display:none;height:calc(100vh - 180px);padding:0;">
-          <div class="inbox-layout">
-
-            <!-- LEFT: Conversations -->
-            <div class="inbox-sidebar">
-              <div class="inbox-sidebar-header">
-                <h3>
-                  <span><i class="ph-fill ph-tray" style="color:var(--accent);margin-right:6px;"></i>Inbox</span>
-                  <span id="inbox-conv-count" style="font-size:11px;color:var(--text-3);font-weight:500;"></span>
-                </h3>
-              </div>
-              <div class="inbox-filter-tabs">
-                <div class="inbox-filter-tab active">Open <span class="count-badge" id="inbox-open-count">0</span></div>
-                <div class="inbox-filter-tab">Snoozed</div>
-                <div class="inbox-filter-tab">Closed</div>
-              </div>
-              <div id="inbox-conv-list">
-                <div class="inbox-placeholder">Select a brand to load conversations.</div>
-              </div>
-            </div>
-
-            <!-- CENTER: Thread -->
-            <div class="inbox-thread" id="inbox-thread">
-              <div class="inbox-empty-state">
-                <i class="ph-thin ph-tray" style="font-size:48px;color:var(--text-3);"></i>
-                <p>Select a conversation to view messages</p>
-              </div>
-            </div>
-
-            <!-- RIGHT: Customer Profile -->
-            <div class="inbox-customer-panel" id="inbox-customer-panel">
-              <div class="customer-panel-section" style="padding:20px 16px;">
-                <div style="text-align:center;color:var(--text-3);">
-                  <i class="ph-thin ph-user-circle" style="font-size:44px;"></i>
-                  <p style="font-size:12px;margin-top:8px;">Select a conversation</p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-      </div><!-- /brand-view-content -->
-    </div><!-- /view-brand -->
-
-  </div><!-- /app-content -->
-</div><!-- /app-shell -->
-
-<!-- Toast -->
-<div class="toast-container" id="toast-container"></div>
-
-<!-- Full Sync Modal -->
-<div class="modal-overlay" id="fullsync-modal">
-  <div class="modal" style="max-width:460px;">
-    <h3><i class="ph-fill ph-database-zap" style="color:var(--accent);"></i> Syncing Data</h3>
-    <p id="fullsync-shop" style="margin-bottom:16px;"></p>
-    <div style="background:var(--border);border-radius:100px;height:5px;margin-bottom:8px;overflow:hidden;">
-      <div id="fullsync-bar" style="height:100%;background:var(--accent-grad);border-radius:100px;transition:width .6s ease;width:0%;"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;margin-bottom:20px;">
-      <span id="fullsync-status-text" style="font-size:13px;color:var(--text-2);">Starting...</span>
-      <span id="fullsync-elapsed" style="font-size:13px;color:var(--text-3);">0s elapsed</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">
-      <div id="stage-products" class="sync-stage"><span class="stage-icon" style="font-size:16px;">⏳</span><span style="flex:1;font-size:13px;font-weight:600;">Products</span><span class="stage-count" id="stage-products-count" style="font-size:12px;color:var(--text-3);">—</span></div>
-      <div id="stage-orders" class="sync-stage"><span class="stage-icon" style="font-size:16px;">⏳</span><span style="flex:1;font-size:13px;font-weight:600;">Orders</span><span class="stage-count" id="stage-orders-count" style="font-size:12px;color:var(--text-3);">—</span></div>
-      <div id="stage-customers" class="sync-stage"><span class="stage-icon" style="font-size:16px;">⏳</span><span style="flex:1;font-size:13px;font-weight:600;">Customers</span><span class="stage-count" id="stage-customers-count" style="font-size:12px;color:var(--text-3);">—</span></div>
-    </div>
-    <div class="modal-actions"><button class="btn btn-secondary" id="fullsync-close-btn" disabled>Close</button></div>
-  </div>
-</div>
+  </header>
 
-<!-- Connect Store Modal -->
-<div class="modal-overlay" id="connect-modal">
-  <div class="modal" style="max-width:500px;">
-    <h3><i class="ph-fill ph-link" style="color:var(--accent);"></i> Connect New Store</h3>
-    <p>Enter your Shopify store details to get started.</p>
-    <form id="connect-form">
-      <input type="hidden" id="owner-id">
-      <div class="form-group">
-        <label class="form-label">Shopify Domain</label>
-        <div class="form-input-wrapper">
-          <input type="text" id="shop-domain" class="form-input" placeholder="your-store" required pattern="^[a-zA-Z0-9][a-zA-Z0-9-]*$" style="padding-right:140px;">
-          <span class="form-input-suffix">.myshopify.com</span>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Client ID</label>
-          <input type="text" id="client-id" class="form-input" placeholder="6a752ee1..." required>
-        </div>
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Client Secret</label>
-          <input type="password" id="client-secret" class="form-input" placeholder="shpss_..." required>
-        </div>
-      </div>
-      <div class="scopes-grid" style="margin-top:16px;">
-        <div class="scope-tag"><i class="ph-fill ph-check-circle"></i> read_products</div>
-        <div class="scope-tag"><i class="ph-fill ph-check-circle"></i> read_orders</div>
-        <div class="scope-tag"><i class="ph-fill ph-check-circle"></i> read_all_orders</div>
-        <div class="scope-tag"><i class="ph-fill ph-check-circle"></i> read_customers</div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="close-connect-modal-btn">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="connect-btn">
-          <span class="btn-text"><i class="ph-bold ph-link"></i> Connect Store</span>
-          <div class="spinner"></div>
+  <!-- Hero Section -->
+  <section class="section hero">
+    <div class="container">
+      <h1 class="fade-up">Engineered systems,<br>not guesses.</h1>
+      <p class="fade-up" style="transition-delay: 0.1s;">Automation Excellence for high-volume Shopify brands. We build invisible systems that scale your operations flawlessly.</p>
+      <div class="hero-actions fade-up" style="transition-delay: 0.2s;">
+        <a href="#packages" class="btn btn-accent">View Packages</a>
+        <button class="btn btn-secondary" onclick="document.getElementById('cmd-palette').classList.add('active'); document.getElementById('cmd-input').focus();">
+          <i class="ph-bold ph-command"></i> Press Cmd + K
         </button>
       </div>
-    </form>
+    </div>
+  </section>
+
+  <!-- Value Proposition -->
+  <section id="philosophy" class="section value-prop">
+    <div class="container">
+      <h2 class="fade-up" style="text-align: center;">Invisible Automation Philosophy</h2>
+      <p class="fade-up" style="text-align: center; margin: 0 auto var(--sp-6) auto;">When it works perfectly, you don't even know it's there. We eliminate the busywork.</p>
+      
+      <div class="grid-3">
+        <div class="feature-card fade-up">
+          <div class="feature-icon"><i class="ph-bold ph-lightning"></i></div>
+          <h3>Instant Sync</h3>
+          <p style="font-size: 1rem;">Real-time bi-directional syncing between Shopify, WhatsApp, and your internal tools.</p>
+        </div>
+        <div class="feature-card fade-up" style="transition-delay: 0.1s;">
+          <div class="feature-icon"><i class="ph-bold ph-brain"></i></div>
+          <h3>AI-Powered Decisions</h3>
+          <p style="font-size: 1rem;">Smart categorization, auto-responses, and intelligent routing built natively into the flow.</p>
+        </div>
+        <div class="feature-card fade-up" style="transition-delay: 0.2s;">
+          <div class="feature-icon"><i class="ph-bold ph-shield-check"></i></div>
+          <h3>Zero Downtime</h3>
+          <p style="font-size: 1rem;">Enterprise-grade infrastructure running on Docker ensures your automations never sleep.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Packages Section -->
+  <section id="packages" class="section packages">
+    <div class="container">
+      <h2 class="fade-up">Shopify Automation Packages</h2>
+      <p class="fade-up">Tailored solutions for brands at every stage of scale.</p>
+
+      <div class="packages-grid">
+        <!-- Basic -->
+        <div class="package-card fade-up">
+          <h3>Basic Core</h3>
+          <p style="font-size: 0.875rem;">Essential automation for growing stores.</p>
+          <div class="package-price">$499<span>/mo</span></div>
+          <ul class="package-features">
+            <li><i class="ph-bold ph-check"></i> 5 Automated Workflows</li>
+            <li><i class="ph-bold ph-check"></i> Basic WhatsApp Alerts</li>
+            <li><i class="ph-bold ph-check"></i> Daily Data Sync</li>
+            <li><i class="ph-bold ph-check"></i> Standard Support</li>
+          </ul>
+          <button class="btn btn-secondary">Get Started</button>
+        </div>
+
+        <!-- Elite -->
+        <div class="package-card elite fade-up" style="transition-delay: 0.1s;">
+          <div class="package-badge">Most Popular</div>
+          <h3>Elite Systems</h3>
+          <p style="font-size: 0.875rem;">Comprehensive architecture for high volume.</p>
+          <div class="package-price">$1,299<span>/mo</span></div>
+          <ul class="package-features">
+            <li><i class="ph-bold ph-check"></i> Unlimited Workflows</li>
+            <li><i class="ph-bold ph-check"></i> Advanced AI Chatbots</li>
+            <li><i class="ph-bold ph-check"></i> Real-time Sync Engine</li>
+            <li><i class="ph-bold ph-check"></i> Dedicated Account Manager</li>
+            <li><i class="ph-bold ph-check"></i> Custom Integrations</li>
+          </ul>
+          <button class="btn btn-primary">Go Elite</button>
+        </div>
+
+        <!-- Plus -->
+        <div class="package-card fade-up" style="transition-delay: 0.2s;">
+          <h3>Enterprise Plus</h3>
+          <p style="font-size: 0.875rem;">Custom infrastructure for massive scale.</p>
+          <div class="package-price">Custom</div>
+          <ul class="package-features">
+            <li><i class="ph-bold ph-check"></i> Dedicated Server Cluster</li>
+            <li><i class="ph-bold ph-check"></i> On-premise Options</li>
+            <li><i class="ph-bold ph-check"></i> Full Source Access</li>
+            <li><i class="ph-bold ph-check"></i> 24/7 SLA Support</li>
+          </ul>
+          <button class="btn btn-secondary">Contact Us</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tech Stack -->
+  <section id="stack" class="section tech-stack">
+    <div class="container">
+      <h2 class="fade-up">Engineered with Precision</h2>
+      <p class="fade-up">We use the most robust, scalable technologies available.</p>
+      
+      <div class="tech-grid fade-up">
+        <div class="tech-item">
+          <i class="ph-bold ph-graph"></i>
+          <h3>n8n</h3>
+          <span style="font-size: 0.875rem; color: rgba(255,255,255,0.7);">Core Logic Engine</span>
+        </div>
+        <div class="tech-item">
+          <i class="ph-bold ph-package"></i>
+          <h3>Docker</h3>
+          <span style="font-size: 0.875rem; color: rgba(255,255,255,0.7);">Containerization</span>
+        </div>
+        <div class="tech-item">
+          <i class="ph-bold ph-whatsapp-logo"></i>
+          <h3>Evolution API</h3>
+          <span style="font-size: 0.875rem; color: rgba(255,255,255,0.7);">Messaging Core</span>
+        </div>
+        <div class="tech-item">
+          <i class="ph-bold ph-database"></i>
+          <h3>Supabase</h3>
+          <span style="font-size: 0.875rem; color: rgba(255,255,255,0.7);">Realtime DB & Auth</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <h2 class="fade-up">Ready to upgrade your systems?</h2>
+      <a href="mailto:Hello@ataproject.com" class="fade-up" style="display:inline-block; margin-bottom: var(--sp-4);">Hello@ataproject.com</a>
+      <div style="font-size: 0.875rem; color: var(--text-muted);">&copy; 2026 ATA Project. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <!-- FAB -->
+  <div class="fab" id="fab-command" title="Open Command Palette (Cmd+K)">
+    <i class="ph-bold ph-command"></i>
   </div>
-</div>
 
-<!-- Settings Modal -->
-<div class="modal-overlay" id="settings-modal" style="z-index:2000;">
-  <div class="modal" style="max-width:560px;">
-    <h3><i class="ph-fill ph-gear" style="color:var(--text-3);"></i> System Settings</h3>
-    <p>Configure your platform credentials to get started.</p>
-    <form id="settings-form">
-      <div class="form-group">
-        <label class="form-label">Supabase URL</label>
-        <input type="text" id="supabase-url" class="form-input" placeholder="https://xxxx.supabase.co" required>
+  <!-- Command Palette -->
+  <div class="cmd-palette-overlay" id="cmd-palette">
+    <div class="cmd-palette">
+      <div class="cmd-input-wrap">
+        <i class="ph-bold ph-magnifying-glass"></i>
+        <input type="text" class="cmd-input" id="cmd-input" placeholder="What do you need?">
       </div>
-      <div class="form-group">
-        <label class="form-label">Supabase Service Role Key</label>
-        <input type="password" id="supabase-service-key" class="form-input" placeholder="eyJ..." required>
+      <div class="cmd-list">
+        <div class="cmd-item" data-action="#packages">
+          <i class="ph-bold ph-package"></i> View Automation Packages
+          <span class="cmd-item-shortcut">P</span>
+        </div>
+        <div class="cmd-item" data-action="#philosophy">
+          <i class="ph-bold ph-brain"></i> Our Philosophy
+        </div>
+        <div class="cmd-item" data-action="#stack">
+          <i class="ph-bold ph-code"></i> Tech Stack Details
+        </div>
+        <div class="cmd-item" data-action="/login.html">
+          <i class="ph-bold ph-sign-in"></i> Log into SaaS Dashboard
+          <span class="cmd-item-shortcut">L</span>
+        </div>
+        <div class="cmd-item" data-action="mailto:Hello@ataproject.com">
+          <i class="ph-bold ph-envelope"></i> Contact Support
+        </div>
       </div>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="close-settings-btn" style="display:none;">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="save-settings-btn">
-          <span class="btn-text">Save Settings</span>
-          <div class="spinner"></div>
-        </button>
-      </div>
-    </form>
+    </div>
   </div>
-</div>
 
-<script src="/js/app.js"></script>
-<script>
-// Left nav tab switching for brand view
-(function() {
-  const navMap = {
-    'nav-orders-btn':   'orders',
-    'nav-products-btn': 'products',
-    'nav-customers-btn':'customers',
-    'nav-chat-btn':     'chat',
-    'nav-whatsapp-btn': 'whatsapp',
-    'nav-inbox-btn':    'inbox',
-  };
-
-  const brandNavBtns = Object.keys(navMap);
-
-  function activateNavBtn(id) {
-    document.querySelectorAll('.left-nav-item').forEach(b => b.classList.remove('active'));
-    const el = document.getElementById(id);
-    if (el) el.classList.add('active');
-  }
-
-  brandNavBtns.forEach(btnId => {
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-      const tab = navMap[btnId];
-      // Trigger the hidden tab button
-      const tabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
-      if (tabBtn) tabBtn.click();
-      activateNavBtn(btnId);
-    });
-  });
-
-  // Show/hide brand nav items
-  window.showBrandNavItems = function() {
-    brandNavBtns.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'flex';
-    });
-    document.getElementById('nav-home-btn').classList.remove('active');
-    activateNavBtn('nav-orders-btn');
-  };
-
-  window.hideBrandNavItems = function() {
-    brandNavBtns.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
-    document.getElementById('nav-home-btn').classList.add('active');
-  };
-
-  document.getElementById('nav-home-btn').addEventListener('click', () => {
-    document.getElementById('back-to-home-btn')?.click();
-  });
-})();
-</script>
+  <script src="/js/agency.js"></script>
 </body>
 </html>

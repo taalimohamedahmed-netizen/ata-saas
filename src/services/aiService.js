@@ -73,12 +73,20 @@ async function buildContext(platformId, question) {
   return parts.join('\n\n');
 }
 
+const OPENROUTER_HEADERS = () => ({
+  'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+  'Content-Type': 'application/json',
+  'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
+  'X-Title': 'ATA SaaS Dashboard',
+});
+
+// Brand chat — has access to a specific store's data
 async function chat(platformId, history, userMessage) {
   if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === 'your-openrouter-api-key') {
     throw new Error('OPENROUTER_API_KEY not configured in .env');
   }
 
-  const contextData = await buildContext(platformId, userMessage);
+  const contextData = platformId ? await buildContext(platformId, userMessage) : 'No store selected.';
 
   const systemPrompt = `You are an AI analyst assistant embedded in a Shopify store dashboard. You have real-time access to the store's database.
 
@@ -103,18 +111,56 @@ INSTRUCTIONS:
       max_tokens: 1500,
       temperature: 0.5,
     },
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
-        'X-Title': 'ATA SaaS Dashboard',
-      },
-      timeout: 30000,
-    }
+    { headers: OPENROUTER_HEADERS(), timeout: 30000 }
   );
 
   return response.data.choices[0].message.content;
 }
 
-module.exports = { chat };
+// Home chat — general assistant for onboarding, setup questions, no store context needed
+async function homeChat(history, userMessage, storeList = []) {
+  if (!process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY === 'your-openrouter-api-key') {
+    throw new Error('OPENROUTER_API_KEY not configured in .env');
+  }
+
+  const storesText = storeList.length > 0
+    ? storeList.map(s => `- ${s}`).join('\n')
+    : 'مفيش متاجر متصلة لحد دلوقتي.';
+
+  const systemPrompt = `أنت مساعد ذكي في منصة ATA SaaS لإدارة متاجر Shopify.
+
+المتاجر المتصلة حالياً:
+${storesText}
+
+مهمتك:
+- مساعدة المستخدم في ربط متاجر Shopify وشرح الخطوات
+- الإجابة على أسئلة عامة عن Shopify وإدارة المتاجر
+- توضيح كيفية الحصول على Client ID وClient Secret من Shopify Partners
+- مساعدة في حل مشاكل الاتصال والربط
+
+قواعد مهمة:
+- رد دايماً بالعربي إلا لو المستخدم كلمك بالإنجليزي
+- لما المستخدم يقول "اتصل" أو "اتربط" — يقصد إن المتجر اتوصل بنجاح (مش مكالمة تليفون)
+- لما المستخدم يقول "لقط" — يقصد "هل اشتغل؟" أو "هل نجح؟"
+- لو المستخدم بيسأل عن حاجة مش في اختصاصك، قوله بصراحة بس حاول تساعده
+- كن مختصر وعملي — مش لازم تشرح كتير`;
+
+  const response = await axios.post(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      model: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...history.slice(-10),
+        { role: 'user', content: userMessage },
+      ],
+      max_tokens: 600,
+      temperature: 0.6,
+    },
+    { headers: OPENROUTER_HEADERS(), timeout: 20000 }
+  );
+
+  return response.data.choices[0].message.content;
+}
+
+module.exports = { chat, homeChat };

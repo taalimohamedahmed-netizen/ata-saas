@@ -1040,12 +1040,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('connect-modal')?.classList.remove('active');
         await loadStoresFromDB();
         const store = connectedStores.find(s => s.domain === shop);
+        homeChatHistory.push({ role: 'assistant', content: `تم ربط المتجر ${shop} بنجاح.` });
         appendHomeMsg('ai', `
           <div class="font-semibold text-green-700 mb-1">✅ تم الربط بنجاح!</div>
           <div class="text-sm mb-3"><strong>${escHtml(shop)}</strong> متصل وبيتعمله sync دلوقتي...</div>
           ${store ? `<button onclick="enterBrand('${store.id}')" class="btn btn-primary btn-sm">عرض البراند <i class="ph ph-arrow-right"></i></button>` : ''}
         `);
       } else {
+        homeChatHistory.push({ role: 'assistant', content: `فشل ربط المتجر: ${error}` });
         appendHomeMsg('ai', `❌ فشل الربط: ${escHtml(error || 'Unknown error')}`);
       }
     };
@@ -1060,6 +1062,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     window.addEventListener('message', msgListener);
 
+    // When popup closes, verify from DB instead of assuming failure
+    const domainToVerify = connectWizard.domain;
     const popupChecker = setInterval(() => {
       if (popup && popup.closed) {
         clearInterval(popupChecker);
@@ -1068,7 +1072,24 @@ document.addEventListener('DOMContentLoaded', async () => {
           bc.close();
           window.removeEventListener('message', msgListener);
           connectWizard.active = false;
-          appendHomeMsg('ai', '❌ تم إغلاق الشاشة قبل اكتمال الربط. حاول تاني.');
+          appendHomeMsg('ai', '🔍 الشاشة اتقفلت... بتتحقق من الاتصال...');
+          loadStoresFromDB().then(() => {
+            const store = connectedStores.find(s => s.domain === domainToVerify);
+            if (store) {
+              homeChatHistory.push({ role: 'assistant', content: `تم ربط المتجر ${domainToVerify} بنجاح.` });
+              appendHomeMsg('ai', `
+                <div class="font-semibold text-green-700 mb-1">✅ تم الربط بنجاح!</div>
+                <div class="text-sm mb-3"><strong>${escHtml(domainToVerify)}</strong> متصل تمام!</div>
+                <button onclick="enterBrand('${store.id}')" class="btn btn-primary btn-sm">عرض البراند <i class="ph ph-arrow-right"></i></button>
+              `);
+            } else {
+              homeChatHistory.push({ role: 'assistant', content: `حاولنا ربط المتجر ${domainToVerify} لكن لم يكتمل الاتصال.` });
+              appendHomeMsg('ai', `
+                <div class="text-sm mb-2">❌ الاتصال لم يكتمل — جرب تاني.</div>
+                <button onclick="triggerWizardConnect()" class="btn btn-primary btn-sm mt-1">🔄 جرب تاني</button>
+              `);
+            }
+          });
         }
       }
     }, 500);
@@ -1112,13 +1133,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await authFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, history: homeChatHistory }),
+        body: JSON.stringify({
+          message,
+          history: homeChatHistory,
+          connectedStores: connectedStores.map(s => s.domain),
+        }),
       });
       const data = await res.json();
       typingEl?.remove();
       if (data.error) throw new Error(data.error);
-      appendHomeMsg('ai', escHtml(data.reply).replace(/\n/g, '<br>'));
-      homeChatHistory.push({ role: 'user', content: message }, { role: 'assistant', content: data.reply });
+      const aiText = data.reply;
+      appendHomeMsg('ai', escHtml(aiText).replace(/\n/g, '<br>'));
+      homeChatHistory.push({ role: 'user', content: message }, { role: 'assistant', content: aiText });
       if (homeChatHistory.length > 20) homeChatHistory = homeChatHistory.slice(-20);
     } catch (err) {
       typingEl?.remove();

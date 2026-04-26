@@ -474,17 +474,23 @@ app.post('/api/conversations/:conversationId/send-media', requireAuth, express.r
 // AI Chat endpoint
 app.post('/api/chat', requireAuth, async (req, res) => {
   try {
-    const { message, history, platformId } = req.body;
+    const { message, history, platformId, connectedStores } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Message is required' });
 
-    if (platformId) {
-      const { supabase } = require('./config/supabase');
-      const { data: platform } = await supabase
-        .from('platforms').select('id').eq('id', platformId).eq('owner_id', req.user.id).single();
-      if (!platform) return res.status(403).json({ error: 'Access denied' });
+    const { chat, homeChat } = require('./services/aiService');
+
+    // Home chat (no specific store) — use general assistant
+    if (!platformId) {
+      const reply = await homeChat(history || [], message, connectedStores || []);
+      return res.json({ reply });
     }
 
-    const { chat } = require('./services/aiService');
+    // Brand chat — verify ownership then query store data
+    const { supabase } = require('./config/supabase');
+    const { data: platform } = await supabase
+      .from('platforms').select('id').eq('id', platformId).eq('owner_id', req.user.id).single();
+    if (!platform) return res.status(403).json({ error: 'Access denied' });
+
     const reply = await chat(platformId, history || [], message);
     res.json({ reply });
   } catch (err) {

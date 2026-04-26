@@ -12,6 +12,16 @@ function copyWebhookUrl(btn) {
   });
 }
 
+function copyModalRedirect(btn) {
+  const text = document.getElementById('modal-redirect-uri')?.textContent?.trim();
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="ph ph-check" style="color:#1800ad;"></i>';
+    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+  });
+}
+
 function copyText(elementId, btn) {
   const text = document.getElementById(elementId)?.textContent?.trim();
   if (!text) return;
@@ -74,9 +84,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const viewHome = document.getElementById('view-home');
   const viewBrand = document.getElementById('view-brand');
   let currentBrandId = null;
-
-  // Modal Elements
-  let currentSyncPlatformId = null;
 
   // Settings Elements
   const settingsModal = document.getElementById('settings-modal');
@@ -943,7 +950,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentConversationId = null;
   let _msgPollingTimer = null;
 
-  function startMessagePolling(conv) {
+  function startMessagePolling(_conv) {
     stopMessagePolling();
     _msgPollingTimer = setInterval(async () => {
       if (!currentConversationId) return;

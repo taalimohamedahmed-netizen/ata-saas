@@ -16,79 +16,10 @@
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-  <!-- Tailwind CSS & shadcn config -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-          },
-          colors: {
-            border: "hsl(var(--border))",
-            input: "hsl(var(--input))",
-            ring: "hsl(var(--ring))",
-            background: "hsl(var(--background))",
-            foreground: "hsl(var(--foreground))",
-            primary: {
-              DEFAULT: "#1800AD", // ATA Deep Electric Blue
-              foreground: "#FFFFFF",
-            },
-            destructive: {
-              DEFAULT: "#FE0000", // ATA Radiant Red
-              foreground: "#FFFFFF",
-            },
-            muted: {
-              DEFAULT: "hsl(var(--muted))",
-              foreground: "hsl(var(--muted-foreground))",
-            },
-            card: {
-              DEFAULT: "hsl(var(--card))",
-              foreground: "hsl(var(--card-foreground))",
-            },
-          },
-          borderRadius: {
-            lg: "0.5rem",
-            md: "calc(0.5rem - 2px)",
-            sm: "calc(0.5rem - 4px)",
-          },
-        }
-      }
-    }
-  </script>
-  <style type="text/tailwindcss">
-    @layer base {
-      :root {
-        --background: 0 0% 100%;
-        --foreground: 222.2 84% 4.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 222.2 84% 4.9%;
-        --muted: 210 40% 96.1%;
-        --muted-foreground: 215.4 16.3% 46.9%;
-        --border: 214.3 31.8% 91.4%;
-        --input: 214.3 31.8% 91.4%;
-        --ring: 243.8 100% 33.9%; /* matches #1800AD approx */
-      }
-    }
-    
-    body {
-      @apply bg-background text-foreground font-sans antialiased;
-    }
-
-    /* Spinner Animation */
-    .spinner { 
-      display: none; width: 16px; height: 16px; 
-      border: 2px solid rgba(255,255,255,.3); 
-      border-top-color: white; border-radius: 50%; 
-      animation: spin 0.7s linear infinite; 
-    }
-    .btn-loading .spinner { display: inline-block; }
-    .btn-loading .btn-text { display: none; }
-    @keyframes spin { to { transform: rotate(360deg) } }
-  </style>
+  <!-- Tailwind CSS compiled -->
+  <link rel="stylesheet" href="/css/tailwind.css">
 </head>
-<body class="min-h-screen flex flex-col justify-center items-center bg-gray-50/50 p-4">
+<body class="login-page">
 
   <!-- Minimal Shadcn-style Auth Card -->
   <div class="w-full max-w-[400px] bg-card rounded-xl border border-border shadow-sm p-8">

@@ -973,6 +973,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="inbox-thread-actions">
           <span class="inbox-status-badge open">● Open</span>
+          <button id="ai-toggle-btn" class="btn btn-secondary btn-sm" title="تشغيل/إيقاف AI" onclick="toggleAI('${conv.id}', this)" style="gap:6px;">
+            <i class="ph-bold ph-robot"></i>
+            <span id="ai-toggle-lbl" style="font-size:12px;">AI Off</span>
+          </button>
           <button class="btn btn-secondary btn-sm"><i class="ph-bold ph-dots-three"></i></button>
         </div>
       </div>
@@ -1051,6 +1055,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const data = await res.json();
       const messages = data.messages || [];
 
+      // Update AI toggle button state
+      const aiBtn = document.getElementById('ai-toggle-btn');
+      const aiLbl = document.getElementById('ai-toggle-lbl');
+      if (aiBtn && aiLbl) {
+        const on = data.ai_enabled;
+        aiBtn.style.background   = on ? 'var(--indigo)' : '';
+        aiBtn.style.color        = on ? '#fff' : '';
+        aiBtn.style.borderColor  = on ? 'var(--indigo)' : '';
+        aiLbl.textContent        = on ? 'AI On' : 'AI Off';
+      }
+
       if (messages.length === 0) {
         messagesEl.innerHTML = '<div class="inbox-placeholder">No messages yet.</div>';
         return;
@@ -1121,6 +1136,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       input.focus();
     }
   }
+
+  window.toggleAI = async function(convId, btn) {
+    const lbl = document.getElementById('ai-toggle-lbl');
+    btn.disabled = true;
+    try {
+      const res = await authFetch(`/api/conversations/${convId}/ai`, { method: 'PATCH' });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+      const on = data.ai_enabled;
+      btn.style.background = on ? 'var(--indigo)' : '';
+      btn.style.color = on ? '#fff' : '';
+      btn.style.borderColor = on ? 'var(--indigo)' : '';
+      lbl.textContent = on ? 'AI On' : 'AI Off';
+      showToast(on ? '🤖 AI تلقائي شغال' : '🤖 AI تلقائي متوقف', on ? 'success' : 'info');
+    } catch (err) {
+      showToast('فشل: ' + err.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  };
 
   async function sendInboxMedia(conv, file) {
     const btn = document.getElementById('inbox-attach-btn');

@@ -310,7 +310,7 @@ app.get('/api/conversations/:conversationId/messages', requireAuth, async (req, 
   try {
     const { supabase } = require('./config/supabase');
     const { data: conv } = await supabase
-      .from('whatsapp_conversations').select('id, platform_id')
+      .from('whatsapp_conversations').select('id, platform_id, ai_enabled')
       .eq('id', req.params.conversationId).maybeSingle();
     if (!conv) return res.status(404).json({ error: 'Conversation not found' });
 
@@ -325,7 +325,7 @@ app.get('/api/conversations/:conversationId/messages', requireAuth, async (req, 
       .order('created_at', { ascending: true })
       .limit(200);
     if (error) throw error;
-    res.json({ messages: data || [] });
+    res.json({ messages: data || [], ai_enabled: conv.ai_enabled || false });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -354,6 +354,27 @@ app.post('/api/conversations/:conversationId/reply', requireAuth, async (req, re
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Reply error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Toggle AI auto-reply for a conversation
+app.patch('/api/conversations/:conversationId/ai', requireAuth, async (req, res) => {
+  try {
+    const { supabase } = require('./config/supabase');
+    const { data: conv } = await supabase
+      .from('whatsapp_conversations').select('id, platform_id, ai_enabled')
+      .eq('id', req.params.conversationId).maybeSingle();
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+
+    const { data: platform } = await supabase
+      .from('platforms').select('id').eq('id', conv.platform_id).eq('owner_id', req.user.id).single();
+    if (!platform) return res.status(403).json({ error: 'Access denied' });
+
+    const newVal = !conv.ai_enabled;
+    await supabase.from('whatsapp_conversations').update({ ai_enabled: newVal }).eq('id', conv.id);
+    res.json({ success: true, ai_enabled: newVal });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

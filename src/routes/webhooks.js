@@ -346,10 +346,10 @@ router.post('/whatsapp', express.json(), async (req, res) => {
       body = `[${type}]`;
     }
 
-    // Find or create conversation (with state + context)
+    // Find or create conversation (with state + context + ai_enabled)
     let { data: conv } = await supabase
       .from('whatsapp_conversations')
-      .select('id, state, context')
+      .select('id, state, context, ai_enabled, platform_id')
       .eq('customer_phone', customerPhone)
       .order('last_message_at', { ascending: false })
       .limit(1)
@@ -371,7 +371,7 @@ router.post('/whatsapp', express.json(), async (req, res) => {
             last_message: body, last_message_at: new Date().toISOString(), state: 'idle', context: {} },
           { onConflict: 'platform_id,customer_phone' }
         )
-        .select('id, state, context')
+        .select('id, state, context, ai_enabled, platform_id')
         .single();
 
       conv = newConv;
@@ -386,11 +386,42 @@ router.post('/whatsapp', express.json(), async (req, res) => {
     await saveMessage(supabase, conv.id, 'inbound', body, waMessageId);
     console.log(`📨 Incoming from ${customerName} (${customerPhone}) [${conv.state}]: ${body.slice(0, 60)}`);
 
-    // Run automation state machine (non-blocking — errors logged, not thrown)
+    // Run automation state machine
     try {
       await processAutomation(conv, message);
     } catch (automationErr) {
       console.error('❌ Automation error:', automationErr.message);
+    }
+
+    // AI auto-reply — only if enabled and conversation is idle (not in automation flow)
+    const automationStates = ['new_order','awaiting_confirmation','awaiting_payment_method','awaiting_payment_screenshot'];
+    const isInAutomation = automationStates.includes(conv.state);
+
+    if (conv.ai_enabled && !isInAutomation && type === 'text') {
+      try {
+        const { chat } = require('../services/aiService');
+
+        // Build conversation history from last 10 messages
+        const { data: recentMsgs } = await supabase
+          .from('whatsapp_messages')
+          .select('direction, body')
+          .eq('conversation_id', conv.id)
+          .eq('direction', 'inbound')
+          .not('body', 'like', '[media:%')
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        const history = (recentMsgs || []).reverse().map(m => ({
+          role: m.direction === 'inbound' ? 'user' : 'assistant',
+          content: m.body,
+        }));
+
+        const aiReply = await chat(conv.platform_id, history, body);
+        await botReply(supabase, conv, aiReply);
+        console.log(`🤖 AI replied to ${customerPhone}`);
+      } catch (aiErr) {
+        console.error('❌ AI reply error:', aiErr.message);
+      }
     }
 
   } catch (err) {

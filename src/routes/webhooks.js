@@ -401,12 +401,10 @@ router.post('/whatsapp', express.json(), async (req, res) => {
       try {
         const { chat } = require('../services/aiService');
 
-        // Build conversation history from last 10 messages
         const { data: recentMsgs } = await supabase
           .from('whatsapp_messages')
           .select('direction, body')
           .eq('conversation_id', conv.id)
-          .eq('direction', 'inbound')
           .not('body', 'like', '[media:%')
           .order('created_at', { ascending: false })
           .limit(10);
@@ -416,9 +414,24 @@ router.post('/whatsapp', express.json(), async (req, res) => {
           content: m.body,
         }));
 
-        const aiReply = await chat(conv.platform_id, history, body);
-        await botReply(supabase, conv, aiReply);
-        console.log(`🤖 AI replied to ${customerPhone}`);
+        let aiReply;
+        try {
+          aiReply = await chat(conv.platform_id, history, body);
+          console.log(`🤖 AI generated reply for ${customerPhone}`);
+        } catch (genErr) {
+          console.error('❌ AI generation error (OpenRouter):', genErr.message);
+          return;
+        }
+
+        try {
+          await botReply(supabase, conv, aiReply);
+          console.log(`🤖 AI reply sent to ${customerPhone}`);
+        } catch (sendErr) {
+          console.error('❌ AI send error (WhatsApp):', sendErr.message);
+          if (sendErr.response) {
+            console.error('   status:', sendErr.response.status, '| data:', JSON.stringify(sendErr.response.data));
+          }
+        }
       } catch (aiErr) {
         console.error('❌ AI reply error:', aiErr.message);
       }

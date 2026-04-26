@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm start *)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(node src/server.js)",
+      "Bash(curl -sv http://localhost:3000/health)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 21856 /F)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(curl -s http://localhost:3000/api/config)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); const {createClient}=require\\('@supabase/supabase-js'\\); console.log\\('URL:', process.env.SUPABASE_URL\\); console.log\\('ANON_KEY exists:', !!process.env.SUPABASE_ANON_KEY\\); console.log\\('ANON_KEY prefix:', process.env.SUPABASE_ANON_KEY?.slice\\(0,20\\)\\);\")",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

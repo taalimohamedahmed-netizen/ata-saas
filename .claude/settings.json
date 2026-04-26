@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "Bash(pkill -f \"node src/server.js\")",
+      "Bash(node -e \"process.stdin.resume\\(\\);let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>console.log\\(JSON.parse\\(d\\).status\\)\\)\")",
+      "Bash(taskkill //PID 5096 //F)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(node test-whatsapp.js)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000/api/settings/whatsapp)",
+      "Bash(ngrok version *)",
+      "Bash(curl -s http://localhost:3000/api/settings/webhook-config)",
+      "PowerShell(winget install ngrok.ngrok --accept-source-agreements --accept-package-agreements 2>&1)"
+    ]
+  }
+}

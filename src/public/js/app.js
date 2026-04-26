@@ -250,12 +250,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     
-    let iconClass = 'ph-info';
-    if (type === 'success') iconClass = 'ph-check-circle';
-    if (type === 'error') iconClass = 'ph-warning-circle';
+    let iconClass = 'ph-info text-primary';
+    if (type === 'success') iconClass = 'ph-check-circle text-green-500';
+    if (type === 'error') iconClass = 'ph-warning-circle text-destructive';
 
     toast.innerHTML = `
-      <i class="ph-fill ${iconClass}" style="font-size: 20px;"></i>
+      <i class="ph-fill ${iconClass} text-xl"></i>
       <div>${message}</div>
     `;
 
@@ -326,23 +326,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     connectedStores.forEach(store => {
       const card = document.createElement('div');
-      card.className = 'brand-card';
+      card.className = 'section-card hover:border-primary transition-colors cursor-pointer group flex flex-col p-0 mb-0 h-full';
       card.innerHTML = `
-        <div class="brand-card-header">
-          <div class="brand-avatar">${store.domain.charAt(0).toUpperCase()}</div>
-          <div style="min-width:0;flex:1;">
-            <div class="brand-domain">${store.domain}</div>
-            <div class="brand-synced">${store.lastSynced ? 'Synced: ' + store.lastSynced : 'Never synced'}</div>
+        <div class="p-6 border-b border-border flex-1">
+          <div class="flex items-center gap-4 mb-6">
+            <div class="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xl group-hover:bg-primary group-hover:text-white transition-colors">
+              ${store.domain.charAt(0).toUpperCase()}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-foreground text-sm truncate">${store.domain}</div>
+              <div class="text-xs text-muted-foreground mt-1 truncate">${store.lastSynced ? 'Synced: ' + store.lastSynced : 'Never synced'}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2" id="brand-stats-${store.id}">
+            <div class="bg-muted/50 rounded-md p-2 text-center border border-border">
+              <div class="brand-stat-val text-lg font-bold text-foreground leading-none">—</div>
+              <div class="brand-stat-lbl text-[10px] uppercase text-muted-foreground mt-1">Products</div>
+            </div>
+            <div class="bg-muted/50 rounded-md p-2 text-center border border-border">
+              <div class="brand-stat-val text-lg font-bold text-foreground leading-none">—</div>
+              <div class="brand-stat-lbl text-[10px] uppercase text-muted-foreground mt-1">Orders</div>
+            </div>
+            <div class="bg-muted/50 rounded-md p-2 text-center border border-border">
+              <div class="brand-stat-val text-lg font-bold text-foreground leading-none">—</div>
+              <div class="brand-stat-lbl text-[10px] uppercase text-muted-foreground mt-1">Customers</div>
+            </div>
           </div>
         </div>
-        <div class="brand-stats-row" id="brand-stats-${store.id}">
-          <div class="brand-stat"><div class="brand-stat-val">—</div><div class="brand-stat-lbl">Products</div></div>
-          <div class="brand-stat"><div class="brand-stat-val">—</div><div class="brand-stat-lbl">Orders</div></div>
-          <div class="brand-stat"><div class="brand-stat-val">—</div><div class="brand-stat-lbl">Customers</div></div>
-        </div>
-        <div class="brand-card-actions">
-          <button class="btn btn-primary btn-sm" style="flex:1;justify-content:center;">
-            <i class="ph-bold ph-arrow-right"></i> Enter Brand
+        <div class="p-4 bg-muted/30 flex justify-end">
+          <button class="btn btn-secondary btn-sm w-full group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-colors">
+            Enter Environment <i class="ph ph-arrow-right"></i>
           </button>
         </div>
       `;
@@ -355,8 +368,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Add "Connect New Store" card
     const addCard = document.createElement('div');
-    addCard.className = 'add-store-card';
-    addCard.innerHTML = '<i class="ph-bold ph-plus-circle"></i><span>Connect New Store</span>';
+    addCard.className = 'section-card border-dashed border-2 bg-transparent hover:border-primary hover:bg-muted/30 transition-colors cursor-pointer flex flex-col items-center justify-center p-0 mb-0 min-h-[220px] text-muted-foreground hover:text-primary';
+    addCard.innerHTML = '<i class="ph ph-plus-circle text-4xl mb-2"></i><span class="font-medium text-sm">Deploy New Environment</span>';
     addCard.addEventListener('click', () => document.getElementById('connect-modal').classList.add('active'));
     brandCardsContainer.appendChild(addCard);
   }
@@ -481,19 +494,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!data.orders || data.orders.length === 0) { empty.style.display = 'block'; return; }
       const tbody = document.getElementById('orders-tbody');
       tbody.innerHTML = data.orders.map(o => {
-        const payBadge = `<span class="badge-${o.financial_status || 'pending'}">${o.financial_status || '—'}</span>`;
+        const payBadge = `<span class="badge badge-${o.financial_status || 'pending'}">${o.financial_status || '—'}</span>`;
         const fulfillBadge = o.fulfillment_status
-          ? `<span class="badge-${o.fulfillment_status}">${o.fulfillment_status}</span>`
-          : `<span class="badge-unfulfilled">unfulfilled</span>`;
+          ? `<span class="badge badge-${o.fulfillment_status}">${o.fulfillment_status}</span>`
+          : `<span class="badge badge-unfulfilled">unfulfilled</span>`;
         const date = o.ordered_at ? new Date(o.ordered_at).toLocaleDateString() : '—';
         return `<tr>
-          <td><strong>#${o.order_number || o.shopify_id}</strong></td>
+          <td class="font-medium text-foreground">#${o.order_number || o.shopify_id}</td>
           <td>${o.customer_name || '—'}</td>
-          <td style="color:var(--text-secondary)">${o.email || '—'}</td>
-          <td><strong>${parseFloat(o.total_price || 0).toFixed(2)} ${o.currency || ''}</strong></td>
+          <td class="text-muted-foreground">${o.email || '—'}</td>
+          <td class="font-medium">${parseFloat(o.total_price || 0).toFixed(2)} ${o.currency || ''}</td>
           <td>${payBadge}</td>
           <td>${fulfillBadge}</td>
-          <td style="color:var(--text-secondary)">${date}</td>
+          <td class="text-muted-foreground">${date}</td>
         </tr>`;
       }).join('');
       table.style.display = 'table';
@@ -514,17 +527,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tbody = document.getElementById('products-tbody');
       tbody.innerHTML = data.products.map(p => {
         const img = p.image_url
-          ? `<img src="${p.image_url}" class="product-img" alt="">`
-          : `<div class="product-img-placeholder"><i class="ph ph-image"></i></div>`;
-        const statusColor = p.status === 'active' ? 'var(--green)' : p.status === 'draft' ? 'var(--amber)' : 'var(--text-muted)';
+          ? `<img src="${p.image_url}" class="w-8 h-8 rounded object-cover border border-border" alt="">`
+          : `<div class="w-8 h-8 rounded bg-muted flex items-center justify-center text-muted-foreground border border-border"><i class="ph ph-image"></i></div>`;
+        const statusColor = p.status === 'active' ? 'text-green-600' : p.status === 'draft' ? 'text-amber-600' : 'text-muted-foreground';
         return `<tr>
           <td>${img}</td>
-          <td><strong>${p.title || '—'}</strong></td>
-          <td style="color:var(--text-secondary)">${p.vendor || '—'}</td>
-          <td style="color:var(--text-secondary)">${p.product_type || '—'}</td>
-          <td><strong>$${parseFloat(p.price || 0).toFixed(2)}</strong></td>
+          <td class="font-medium text-foreground">${p.title || '—'}</td>
+          <td class="text-muted-foreground">${p.vendor || '—'}</td>
+          <td class="text-muted-foreground">${p.product_type || '—'}</td>
+          <td class="font-medium">$${parseFloat(p.price || 0).toFixed(2)}</td>
           <td>${p.inventory_qty ?? '—'}</td>
-          <td><span style="color:${statusColor};font-weight:500;">${p.status || '—'}</span></td>
+          <td><span class="${statusColor} font-medium capitalize">${p.status || '—'}</span></td>
         </tr>`;
       }).join('');
       table.style.display = 'table';
@@ -889,10 +902,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function appendMsg(containerId, role, text) {
     const container = document.getElementById(containerId);
+    if (!container) return;
     const wrapper = document.createElement('div');
-    wrapper.className = role === 'user' ? 'chat-msg-user' : 'chat-msg-ai';
+    wrapper.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
     const bubble = document.createElement('div');
-    bubble.className = role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai';
+    bubble.className = role === 'user' 
+      ? 'bg-primary text-primary-foreground p-3 rounded-2xl rounded-tr-sm max-w-[85%] border shadow-sm' 
+      : 'bg-muted text-foreground p-3 rounded-2xl rounded-tl-sm max-w-[85%] border border-border shadow-sm';
     bubble.textContent = text;
     wrapper.appendChild(bubble);
     container.appendChild(wrapper);
@@ -901,9 +917,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function appendTypingTo(containerId) {
     const container = document.getElementById(containerId);
+    if (!container) return null;
     const wrapper = document.createElement('div');
-    wrapper.className = 'chat-msg-ai';
-    wrapper.innerHTML = '<div class="chat-typing"><span></span><span></span><span></span></div>';
+    wrapper.className = 'flex justify-start';
+    wrapper.innerHTML = '<div class="bg-muted text-foreground p-3 rounded-2xl rounded-tl-sm border border-border shadow-sm flex gap-1"><span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce"></span><span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style="animation-delay:0.1s"></span><span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style="animation-delay:0.2s"></span></div>';
     container.appendChild(wrapper);
     container.scrollTop = container.scrollHeight;
     return wrapper;
@@ -931,10 +948,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const isOut = msg.direction === 'outbound';
             const time  = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const wrapper = document.createElement('div');
-            wrapper.className = `inbox-msg ${isOut ? 'inbox-msg-out' : 'inbox-msg-in'}`;
+            wrapper.className = `flex flex-col max-w-[75%] ${isOut ? 'self-end items-end' : 'self-start items-start'}`;
             wrapper.innerHTML = `
-              <div class="${isOut ? 'inbox-bubble-out' : 'inbox-bubble-in'}">${renderMsgBody(msg.body)}</div>
-              <div class="inbox-msg-time">${isOut ? 'You · ' : ''}${time}</div>
+              <div class="${isOut ? 'bg-primary text-primary-foreground p-2.5 rounded-2xl rounded-tr-sm' : 'bg-muted text-foreground p-2.5 rounded-2xl rounded-tl-sm border border-border shadow-sm'} text-sm leading-relaxed break-words">${renderMsgBody(msg.body)}</div>
+              <div class="text-[10px] text-muted-foreground mt-1">${isOut ? 'You · ' : ''}${time}</div>
             `;
             messagesEl.appendChild(wrapper);
           });
@@ -981,7 +998,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderConvItem(conv) {
     const convList = document.getElementById('inbox-conv-list');
     const item = document.createElement('div');
-    item.className = 'inbox-conv-item';
+    item.className = 'inbox-conv-item px-4 py-3 border-b border-border hover:bg-muted/50 cursor-pointer transition-colors flex items-start gap-3';
     item.dataset.id = conv.id;
 
     const name    = conv.customer_name || conv.customer_phone;
@@ -990,12 +1007,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const preview = conv.last_message ? conv.last_message.slice(0, 45) : '—';
 
     item.innerHTML = `
-      <div class="inbox-conv-avatar">${initial}</div>
-      <div class="inbox-conv-info">
-        <div class="inbox-conv-name">${escHtml(name)}</div>
-        <div class="inbox-conv-preview">${escHtml(preview)}</div>
+      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold flex-shrink-0">${initial}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm text-foreground truncate">${escHtml(name)}</div>
+        <div class="text-xs text-muted-foreground truncate mt-0.5">${escHtml(preview)}</div>
       </div>
-      <div class="inbox-conv-time">${time}</div>
+      <div class="text-[10px] text-muted-foreground whitespace-nowrap">${time}</div>
     `;
 
     item.addEventListener('click', () => openConversation(conv));
@@ -1012,39 +1029,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     const thread = document.getElementById('inbox-thread');
 
     thread.innerHTML = `
-      <div class="inbox-thread-header">
-        <div class="inbox-thread-header-left">
-          <div class="inbox-thread-avatar">${escHtml(name.charAt(0).toUpperCase())}</div>
+      <div class="flex items-center justify-between p-4 bg-background border-b border-border flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold flex-shrink-0">${escHtml(name.charAt(0).toUpperCase())}</div>
           <div>
-            <div class="inbox-thread-name">${escHtml(name)}</div>
-            <div class="inbox-thread-phone">${escHtml(conv.customer_phone)}</div>
+            <div class="font-semibold text-sm text-foreground">${escHtml(name)}</div>
+            <div class="text-xs text-muted-foreground">${escHtml(conv.customer_phone)}</div>
           </div>
         </div>
-        <div class="inbox-thread-actions">
-          <span class="inbox-status-badge open">● Open</span>
-          <button id="ai-toggle-btn" class="btn btn-secondary btn-sm" title="تشغيل/إيقاف AI" onclick="toggleAI('${conv.id}', this)" style="gap:6px;">
-            <i class="ph-bold ph-robot"></i>
-            <span id="ai-toggle-lbl" style="font-size:12px;">AI Off</span>
+        <div class="flex items-center gap-2">
+          <span class="badge bg-green-100 text-green-800 border-transparent">● Open</span>
+          <button id="ai-toggle-btn" class="btn btn-secondary btn-sm" title="Toggle AI" onclick="toggleAI('${conv.id}', this)">
+            <i class="ph-bold ph-robot"></i> <span id="ai-toggle-lbl">AI Off</span>
           </button>
           <button class="btn btn-secondary btn-sm"><i class="ph-bold ph-dots-three"></i></button>
         </div>
       </div>
-      <div class="inbox-thread-messages" id="inbox-messages">
-        <div class="inbox-placeholder">Loading messages...</div>
+      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 bg-gray-50/50" id="inbox-messages">
+        <div class="text-center text-muted-foreground/50 text-sm py-10">Loading messages...</div>
       </div>
-      <div class="inbox-reply-area">
-        <div class="inbox-reply-tabs">
-          <div class="inbox-reply-tab active">Reply</div>
-          <div class="inbox-reply-tab">Note</div>
+      <div class="bg-background border-t border-border flex-shrink-0">
+        <div class="flex gap-0 px-4 border-b border-border">
+          <div class="px-4 py-2 text-xs font-semibold text-primary border-b-2 border-primary cursor-pointer">Reply</div>
+          <div class="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer">Note</div>
         </div>
-        <div class="inbox-reply-bar">
+        <div class="flex gap-2 p-3">
           <input type="file" id="inbox-media-input" accept="image/*,audio/*,video/*,.pdf,.doc,.docx" style="display:none;">
-          <button id="inbox-attach-btn" class="btn btn-secondary btn-sm" style="flex-shrink:0;" title="إرسال ملف">
-            <i class="ph-bold ph-paperclip"></i>
+          <button id="inbox-attach-btn" class="btn btn-secondary btn-sm flex-shrink-0" title="Attach file">
+            <i class="ph ph-paperclip text-lg"></i>
           </button>
-          <input type="text" id="inbox-reply-input" class="form-input" placeholder="اكتب رسالة...">
-          <button id="inbox-reply-send" class="btn btn-primary btn-sm" style="flex-shrink:0;">
-            <span class="btn-text"><i class="ph-bold ph-paper-plane-tilt"></i></span>
+          <input type="text" id="inbox-reply-input" class="form-input flex-1" placeholder="Type a message...">
+          <button id="inbox-reply-send" class="btn btn-primary btn-sm flex-shrink-0">
+            <span class="btn-text"><i class="ph ph-paper-plane-tilt text-lg"></i></span>
             <div class="spinner"></div>
           </button>
         </div>
@@ -1055,27 +1071,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const panel = document.getElementById('inbox-customer-panel');
     if (panel) {
       panel.innerHTML = `
-        <div class="customer-panel-section">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-            <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:16px;flex-shrink:0;">${escHtml(name.charAt(0).toUpperCase())}</div>
+        <div class="p-4 border-b border-border">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold flex-shrink-0">${escHtml(name.charAt(0).toUpperCase())}</div>
             <div>
-              <div style="font-weight:700;font-size:14px;color:var(--text);">${escHtml(name)}</div>
-              <div style="font-size:11px;color:var(--text-3);">WhatsApp Customer</div>
+              <div class="font-bold text-sm text-foreground">${escHtml(name)}</div>
+              <div class="text-[11px] text-muted-foreground">WhatsApp Customer</div>
             </div>
           </div>
-          <div class="customer-info-row"><i class="ph ph-phone"></i><span>${escHtml(conv.customer_phone)}</span></div>
+          <div class="flex items-start gap-2 text-xs text-muted-foreground mb-2"><i class="ph ph-phone mt-0.5 text-muted-foreground/70"></i><span class="text-foreground font-medium">${escHtml(conv.customer_phone)}</span></div>
         </div>
-        <div class="customer-panel-section">
-          <div class="customer-panel-title">Stats</div>
-          <div class="customer-stat-row">
-            <div class="customer-stat-box"><div class="val">—</div><div class="lbl">Orders</div></div>
-            <div class="customer-stat-box"><div class="val">—</div><div class="lbl">Spent</div></div>
+        <div class="p-4 border-b border-border">
+          <div class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Stats</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-muted/50 border border-border rounded-md p-2 text-center"><div class="text-sm font-bold text-foreground">—</div><div class="text-[10px] uppercase text-muted-foreground mt-0.5">Orders</div></div>
+            <div class="bg-muted/50 border border-border rounded-md p-2 text-center"><div class="text-sm font-bold text-foreground">—</div><div class="text-[10px] uppercase text-muted-foreground mt-0.5">Spent</div></div>
           </div>
         </div>
-        <div class="customer-panel-section">
-          <div class="customer-panel-title">Conversation</div>
-          <div class="customer-info-row"><i class="ph ph-clock"></i><span style="color:var(--text-2);">${conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString() : 'No messages'}</span></div>
-          ${conv.last_message ? `<div style="font-size:12px;color:var(--text-3);margin-top:4px;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);border:1px solid var(--border);">${escHtml(conv.last_message.slice(0,80))}${conv.last_message.length>80?'...':''}</div>` : ''}
+        <div class="p-4 border-b border-border">
+          <div class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Conversation</div>
+          <div class="flex items-start gap-2 text-xs text-muted-foreground mb-2"><i class="ph ph-clock mt-0.5 text-muted-foreground/70"></i><span>${conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString() : 'No messages'}</span></div>
+          ${conv.last_message ? `<div class="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded-md border border-border">${escHtml(conv.last_message.slice(0,80))}${conv.last_message.length>80?'...':''}</div>` : ''}
         </div>
       `;
     }
@@ -1126,10 +1142,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const isOut = msg.direction === 'outbound';
         const time  = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const wrapper = document.createElement('div');
-        wrapper.className = `inbox-msg ${isOut ? 'inbox-msg-out' : 'inbox-msg-in'}`;
+        wrapper.className = `flex flex-col max-w-[75%] ${isOut ? 'self-end items-end' : 'self-start items-start'}`;
         wrapper.innerHTML = `
-          <div class="${isOut ? 'inbox-bubble-out' : 'inbox-bubble-in'}">${renderMsgBody(msg.body)}</div>
-          <div class="inbox-msg-time">${isOut ? 'You · ' : ''}${time}</div>
+          <div class="${isOut ? 'bg-primary text-primary-foreground p-2.5 rounded-2xl rounded-tr-sm' : 'bg-muted text-foreground p-2.5 rounded-2xl rounded-tl-sm border border-border shadow-sm'} text-sm leading-relaxed break-words">${renderMsgBody(msg.body)}</div>
+          <div class="text-[10px] text-muted-foreground mt-1">${isOut ? 'You · ' : ''}${time}</div>
         `;
         messagesEl.appendChild(wrapper);
       });
@@ -1163,10 +1179,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const messagesEl = document.getElementById('inbox-messages');
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const wrapper = document.createElement('div');
-      wrapper.className = 'inbox-msg inbox-msg-out';
+      wrapper.className = 'flex flex-col max-w-[75%] self-end items-end';
       wrapper.innerHTML = `
-        <div class="inbox-bubble-out">${escHtml(body)}</div>
-        <div class="inbox-msg-time">You · ${time}</div>
+        <div class="bg-primary text-primary-foreground p-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed break-words">${escHtml(body)}</div>
+        <div class="text-[10px] text-muted-foreground mt-1">You · ${time}</div>
       `;
       messagesEl.appendChild(wrapper);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1227,11 +1243,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const messagesEl = document.getElementById('inbox-messages');
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const wrapper = document.createElement('div');
-      wrapper.className = 'inbox-msg inbox-msg-out';
+      wrapper.className = 'flex flex-col max-w-[75%] self-end items-end';
       const bodyText = `[media:${data.waType}:${data.mediaId}]`;
       wrapper.innerHTML = `
-        <div class="inbox-bubble-out">${renderMsgBody(bodyText)}</div>
-        <div class="inbox-msg-time">You · ${time}</div>
+        <div class="bg-primary text-primary-foreground p-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed break-words">${renderMsgBody(bodyText)}</div>
+        <div class="text-[10px] text-muted-foreground mt-1">You · ${time}</div>
       `;
       messagesEl.appendChild(wrapper);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1294,11 +1310,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       tbody.innerHTML = data.customers.map(c => {
         const name = [c.first_name, c.last_name].filter(Boolean).join(' ') || '—';
         return `<tr>
-          <td><strong>${name}</strong></td>
-          <td style="color:var(--text-secondary)">${c.email || '—'}</td>
-          <td style="color:var(--text-secondary)">${c.phone || '—'}</td>
+          <td class="font-medium text-foreground">${name}</td>
+          <td class="text-muted-foreground">${c.email || '—'}</td>
+          <td class="text-muted-foreground">${c.phone || '—'}</td>
           <td>${c.orders_count ?? 0}</td>
-          <td><strong>$${parseFloat(c.total_spent || 0).toFixed(2)}</strong></td>
+          <td class="font-medium">$${parseFloat(c.total_spent || 0).toFixed(2)}</td>
         </tr>`;
       }).join('');
       table.style.display = 'table';

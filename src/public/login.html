@@ -3,67 +3,160 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ATA SaaS | Login</title>
-  <link rel="stylesheet" href="/css/styles.css">
+  <title>ATA SaaS | Secure Login</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Phosphor Icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <style>
-    .auth-container { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; position:relative; z-index:1; }
-    .auth-card { background:var(--bg-secondary); border:1px solid var(--border-glass); border-radius:var(--radius-lg); padding:40px; width:100%; max-width:420px; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
-    .auth-logo { display:flex; align-items:center; gap:12px; margin-bottom:32px; }
-    .auth-logo-icon { width:44px; height:44px; background:var(--accent-grad); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; color:white; }
-    .auth-logo-title { font-size:22px; font-weight:800; } .auth-logo-title span { color:var(--accent-light); }
-    .auth-tabs { display:flex; gap:0; border-bottom:1px solid var(--border-glass); margin-bottom:28px; }
-    .auth-tab { flex:1; background:none; border:none; color:var(--text-secondary); font-size:14px; font-weight:500; padding:10px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; transition:all 0.2s; }
-    .auth-tab.active { color:var(--accent-light); border-bottom-color:var(--accent-light); }
-    .auth-error { background:var(--red-bg); color:var(--red); border:1px solid rgba(248,113,113,0.2); border-radius:var(--radius-sm); padding:12px 16px; font-size:13px; margin-bottom:16px; display:none; }
-    .auth-success { background:var(--green-bg); color:var(--green); border:1px solid rgba(52,211,153,0.2); border-radius:var(--radius-sm); padding:12px 16px; font-size:13px; margin-bottom:16px; display:none; }
+
+  <!-- Tailwind CSS & shadcn config -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            border: "hsl(var(--border))",
+            input: "hsl(var(--input))",
+            ring: "hsl(var(--ring))",
+            background: "hsl(var(--background))",
+            foreground: "hsl(var(--foreground))",
+            primary: {
+              DEFAULT: "#1800AD", // ATA Deep Electric Blue
+              foreground: "#FFFFFF",
+            },
+            destructive: {
+              DEFAULT: "#FE0000", // ATA Radiant Red
+              foreground: "#FFFFFF",
+            },
+            muted: {
+              DEFAULT: "hsl(var(--muted))",
+              foreground: "hsl(var(--muted-foreground))",
+            },
+            card: {
+              DEFAULT: "hsl(var(--card))",
+              foreground: "hsl(var(--card-foreground))",
+            },
+          },
+          borderRadius: {
+            lg: "0.5rem",
+            md: "calc(0.5rem - 2px)",
+            sm: "calc(0.5rem - 4px)",
+          },
+        }
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer base {
+      :root {
+        --background: 0 0% 100%;
+        --foreground: 222.2 84% 4.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 222.2 84% 4.9%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 243.8 100% 33.9%; /* matches #1800AD approx */
+      }
+    }
+    
+    body {
+      @apply bg-background text-foreground font-sans antialiased;
+    }
+
+    /* Spinner Animation */
+    .spinner { 
+      display: none; width: 16px; height: 16px; 
+      border: 2px solid rgba(255,255,255,.3); 
+      border-top-color: white; border-radius: 50%; 
+      animation: spin 0.7s linear infinite; 
+    }
+    .btn-loading .spinner { display: inline-block; }
+    .btn-loading .btn-text { display: none; }
+    @keyframes spin { to { transform: rotate(360deg) } }
   </style>
 </head>
-<body>
-  <div class="bg-mesh"></div>
-  <div class="auth-container">
-    <div class="auth-card">
-      <div class="auth-logo">
-        <div class="auth-logo-icon"><i class="ph-bold ph-robot"></i></div>
-        <div class="auth-logo-title">ATA <span>SaaS</span></div>
-      </div>
+<body class="min-h-screen flex flex-col justify-center items-center bg-gray-50/50 p-4">
 
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login-btn">Sign In</button>
-        <button class="auth-tab" id="tab-signup-btn">Sign Up</button>
-      </div>
-
-      <div id="auth-error" class="auth-error"></div>
-      <div id="auth-success" class="auth-success"></div>
-
-      <form id="auth-form">
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input type="email" id="auth-email" class="form-input" placeholder="you@example.com" required autocomplete="email">
+  <!-- Minimal Shadcn-style Auth Card -->
+  <div class="w-full max-w-[400px] bg-card rounded-xl border border-border shadow-sm p-8">
+    
+    <!-- Header -->
+    <div class="flex flex-col space-y-2 text-center mb-8">
+      <div class="flex items-center justify-center gap-2 mb-2">
+        <div class="w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-xl">
+          <i class="ph ph-robot"></i>
         </div>
-        <div class="form-group" style="margin-top:16px;">
-          <label class="form-label">Password</label>
-          <input type="password" id="auth-password" class="form-input" placeholder="••••••••" required autocomplete="current-password" minlength="6">
-        </div>
-        <button type="submit" class="btn btn-primary" id="auth-submit-btn" style="width:100%;margin-top:24px;justify-content:center;">
-          <span class="btn-text" id="auth-btn-text">Sign In</span>
-          <div class="spinner"></div>
-        </button>
-      </form>
+        <div class="text-2xl font-bold tracking-tight">ATA <span class="text-primary">SaaS</span></div>
+      </div>
+      <p class="text-sm text-muted-foreground">Enter your credentials to access the gateway</p>
     </div>
+
+    <!-- Tabs -->
+    <div class="grid grid-cols-2 w-full p-1 bg-muted rounded-lg mb-6">
+      <button id="tab-login-btn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 shadow-sm bg-background text-foreground">Sign In</button>
+      <button id="tab-signup-btn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 text-muted-foreground hover:bg-muted/50">Sign Up</button>
+    </div>
+
+    <!-- Alerts -->
+    <div id="auth-error" class="hidden mb-6 rounded-md bg-destructive/10 p-4 text-sm font-medium text-destructive border border-destructive/20"></div>
+    <div id="auth-success" class="hidden mb-6 rounded-md bg-green-50 p-4 text-sm font-medium text-green-800 border border-green-200"></div>
+
+    <!-- Form -->
+    <form id="auth-form" class="space-y-4">
+      <div class="space-y-2">
+        <label for="auth-email" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Email</label>
+        <input type="email" id="auth-email" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="space-y-2">
+        <label for="auth-password" class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Password</label>
+        <input type="password" id="auth-password" class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors" placeholder="••••••••" required autocomplete="current-password" minlength="6">
+      </div>
+      
+      <button type="submit" id="auth-submit-btn" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 w-full mt-6 shadow hover:shadow-md">
+        <span class="btn-text" id="auth-btn-text">Sign In</span>
+        <div class="spinner"></div>
+      </button>
+    </form>
+    
+  </div>
+
+  <div class="mt-8 text-center text-xs text-muted-foreground">
+    Secured by ATA Automation Gateway &copy; 2026
   </div>
 
   <script>
     let mode = 'login';
+    const tabLogin = document.getElementById('tab-login-btn');
+    const tabSignup = document.getElementById('tab-signup-btn');
 
-    document.getElementById('tab-login-btn').addEventListener('click', () => setMode('login'));
-    document.getElementById('tab-signup-btn').addEventListener('click', () => setMode('signup'));
+    tabLogin.addEventListener('click', () => setMode('login'));
+    tabSignup.addEventListener('click', () => setMode('signup'));
 
     function setMode(m) {
       mode = m;
-      document.getElementById('tab-login-btn').classList.toggle('active', m === 'login');
-      document.getElementById('tab-signup-btn').classList.toggle('active', m === 'signup');
+      
+      // Update Tab Styles (Shadcn style tabs)
+      if (m === 'login') {
+        tabLogin.className = "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shadow-sm bg-background text-foreground";
+        tabSignup.className = "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-muted-foreground hover:bg-muted/50";
+      } else {
+        tabSignup.className = "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shadow-sm bg-background text-foreground";
+        tabLogin.className = "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 text-muted-foreground hover:bg-muted/50";
+      }
+
       document.getElementById('auth-btn-text').textContent = m === 'login' ? 'Sign In' : 'Create Account';
       document.getElementById('auth-error').style.display = 'none';
       document.getElementById('auth-success').style.display = 'none';

@@ -359,11 +359,36 @@
       <span id="fullsync-elapsed font-mono">0.0s</span>
     </div>
     <div class="space-y-2 mb-6">
-      <div id="stage-products" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><i class="ph ph-package"></i> Products</span><span id="stage-products-count" class="text-xs font-mono text-muted-foreground">—</span></div>
-      <div id="stage-orders" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><i class="ph ph-shopping-cart"></i> Orders</span><span id="stage-orders-count" class="text-xs font-mono text-muted-foreground">—</span></div>
-      <div id="stage-customers" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><i class="ph ph-users"></i> Customers</span><span id="stage-customers-count" class="text-xs font-mono text-muted-foreground">—</span></div>
+      <div id="stage-products" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><span class="stage-icon">⏳</span><i class="ph ph-package"></i> Products</span><span id="stage-products-count" class="text-xs font-mono text-muted-foreground">—</span></div>
+      <div id="stage-orders" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><span class="stage-icon">⏳</span><i class="ph ph-shopping-cart"></i> Orders</span><span id="stage-orders-count" class="text-xs font-mono text-muted-foreground">—</span></div>
+      <div id="stage-customers" class="flex items-center justify-between p-2 rounded bg-muted/50 border border-border text-sm"><span class="flex items-center gap-2 font-medium"><span class="stage-icon">⏳</span><i class="ph ph-users"></i> Customers</span><span id="stage-customers-count" class="text-xs font-mono text-muted-foreground">—</span></div>
     </div>
     <div class="flex justify-end"><button class="btn btn-secondary" id="fullsync-close-btn" disabled>Close</button></div>
+  </div>
+</div>
+
+<!-- System Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h3 class="flex items-center gap-2"><i class="ph ph-gear text-primary"></i> System Configuration</h3>
+    <p class="text-sm text-muted-foreground mb-4">Configure your Supabase connection to activate the platform.</p>
+    <form id="settings-form" class="space-y-4">
+      <div class="form-group">
+        <label class="form-label">Supabase Project URL</label>
+        <input type="url" id="supabase-url" class="form-input" placeholder="https://xxx.supabase.co" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Supabase Service Key</label>
+        <input type="password" id="supabase-service-key" class="form-input" placeholder="eyJhbGciOi..." required>
+      </div>
+      <div class="flex justify-end gap-2 mt-6">
+        <button type="button" class="btn btn-secondary" id="close-settings-btn">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="save-settings-btn">
+          <span class="btn-text">Save &amp; Activate</span>
+          <div class="spinner"></div>
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 

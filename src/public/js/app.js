@@ -167,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function setupNavigation() {
     document.getElementById('back-to-home-btn').addEventListener('click', () => { showHomeView(); });
-    document.getElementById('nav-brand-link').addEventListener('click', (e) => { e.preventDefault(); showHomeView(); });
+    document.getElementById('nav-brand-link')?.addEventListener('click', (e) => { e.preventDefault(); showHomeView(); });
 
     // Connect modal
     document.getElementById('open-connect-modal-btn').addEventListener('click', () => {
@@ -311,6 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function populateHomeChatSelect() {
     const select = document.getElementById('home-chat-store-select');
+    if (!select) return;
     select.innerHTML = '<option value="">— اختار براند —</option>';
     connectedStores.forEach(s => {
       const opt = document.createElement('option');
@@ -395,7 +396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const data = await res.json();
       
       if (!data.configured) {
-        settingsModal.classList.add('active');
+        settingsModal?.classList.add('active');
         isSystemReady = false;
         showToast('System configuration required', 'error');
       } else {
@@ -407,7 +408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  settingsForm.addEventListener('submit', async (e) => {
+  settingsForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
     saveSettingsBtn.classList.add('btn-loading');
@@ -429,9 +430,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (data.success) {
         showToast('Settings saved successfully! You can now connect stores.', 'success');
-        settingsModal.classList.remove('active');
+        settingsModal?.classList.remove('active');
         isSystemReady = true;
-        
+
         // Resume initialization
         init();
       } else {
@@ -440,13 +441,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       showToast(error.message, 'error');
     } finally {
-      saveSettingsBtn.classList.remove('btn-loading');
-      saveSettingsBtn.disabled = false;
+      saveSettingsBtn?.classList.remove('btn-loading');
+      if (saveSettingsBtn) saveSettingsBtn.disabled = false;
     }
   });
 
-  closeSettingsBtn.addEventListener('click', () => {
-    settingsModal.classList.remove('active');
+  closeSettingsBtn?.addEventListener('click', () => {
+    settingsModal?.classList.remove('active');
   });
 
   // --- Tabs ---
@@ -796,9 +797,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             showToast(`Full sync complete! ${r.products.toLocaleString()} products, ${r.orders.toLocaleString()} orders, ${r.customers.toLocaleString()} customers.`, 'success');
 
             // Update stats immediately
-            document.getElementById('stat-products').innerText = r.products.toLocaleString();
-            document.getElementById('stat-orders').innerText = r.orders.toLocaleString();
-            document.getElementById('stat-customers').innerText = r.customers.toLocaleString();
+            const _p = document.getElementById('bv-stat-products');
+            const _o = document.getElementById('bv-stat-orders');
+            const _c = document.getElementById('bv-stat-customers');
+            if (_p) _p.innerText = r.products.toLocaleString();
+            if (_o) _o.innerText = r.orders.toLocaleString();
+            if (_c) _c.innerText = r.customers.toLocaleString();
 
             // Reset tab cache so next click reloads fresh data
             tabLoaded.orders = false;
@@ -827,49 +831,58 @@ document.addEventListener('DOMContentLoaded', async () => {
   let homeChatHistory = [];
   let brandChatHistory = [];
 
-  // Home chat UI interactions
+  // Home chat UI interactions (elements may not exist in current layout)
   const homeChatPanel = document.getElementById('home-chat-panel');
   const homeChatInput = document.getElementById('home-chat-input');
   const closeChatBtn = document.getElementById('close-chat-btn');
 
-  homeChatInput.addEventListener('focus', () => {
-    if (homeChatPanel.classList.contains('collapsed')) {
+  homeChatInput?.addEventListener('focus', () => {
+    if (homeChatPanel?.classList.contains('collapsed')) {
       homeChatPanel.classList.remove('collapsed');
       homeChatPanel.classList.add('expanded');
     }
   });
 
-  closeChatBtn.addEventListener('click', () => {
-    homeChatPanel.classList.remove('expanded');
-    homeChatPanel.classList.add('collapsed');
+  closeChatBtn?.addEventListener('click', () => {
+    homeChatPanel?.classList.remove('expanded');
+    homeChatPanel?.classList.add('collapsed');
   });
 
   // Home chat
-  document.getElementById('home-chat-send-btn').addEventListener('click', sendHomeChatMessage);
-  homeChatInput.addEventListener('keydown', (e) => {
+  document.getElementById('home-chat-send-btn')?.addEventListener('click', sendHomeChatMessage);
+  homeChatInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendHomeChatMessage(); }
   });
 
   async function sendHomeChatMessage() {
     const input = document.getElementById('home-chat-input');
+    if (!input) return;
     const message = input.value.trim();
     if (!message) return;
-    const platformId = document.getElementById('home-chat-store-select').value;
+    const platformId = document.getElementById('home-chat-store-select')?.value;
     if (!platformId) { showToast('اختار براند الأول', 'error'); return; }
     input.value = '';
     appendMsg('home-chat-messages', 'user', message);
     const btn = document.getElementById('home-chat-send-btn');
-    btn.classList.add('btn-loading'); btn.disabled = true; input.disabled = true;
+    if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
+    input.disabled = true;
     const typingEl = appendTypingTo('home-chat-messages');
     try {
       const res = await authFetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message, history:homeChatHistory, platformId }) });
-      const data = await res.json(); typingEl.remove();
+      const data = await res.json();
+      typingEl?.remove();
       if (data.error) throw new Error(data.error);
       appendMsg('home-chat-messages', 'ai', data.reply);
       homeChatHistory.push({ role:'user', content:message }, { role:'assistant', content:data.reply });
       if (homeChatHistory.length > 20) homeChatHistory = homeChatHistory.slice(-20);
-    } catch (err) { typingEl.remove(); appendMsg('home-chat-messages', 'ai', '❌ Error: ' + err.message); }
-    finally { btn.classList.remove('btn-loading'); btn.disabled = false; input.disabled = false; input.focus(); }
+    } catch (err) {
+      typingEl?.remove();
+      appendMsg('home-chat-messages', 'ai', '❌ Error: ' + err.message);
+    } finally {
+      if (btn) { btn.classList.remove('btn-loading'); btn.disabled = false; }
+      input.disabled = false;
+      input.focus();
+    }
   }
 
   // Brand chat

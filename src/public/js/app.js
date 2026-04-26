@@ -222,35 +222,49 @@ document.addEventListener('DOMContentLoaded', async () => {
       'width=600,height=700,top=100,left=100,scrollbars=yes'
     );
 
-    // Listen for success message from the popup
-    const messageHandler = (event) => {
-      if (event.origin !== window.location.origin) return;
-      
-      if (event.data.type === 'SHOPIFY_CONNECTED') {
-        window.removeEventListener('message', messageHandler);
-        clearInterval(popupChecker);
-        connectBtn.classList.remove('btn-loading');
-        connectBtn.disabled = false;
-        
-        if (event.data.success) {
-          showToast(`✅ ${event.data.shop} connected! Syncing data...`, 'success');
-          connectForm.reset();
-          // Refresh stores list after a moment to show the new store
-          setTimeout(loadStoresFromDB, 2000);
-        } else {
-          showToast(`❌ Error: ${event.data.error}`, 'error');
-        }
+    // Listen for success via BroadcastChannel (works even when opener is cleared cross-origin)
+    let formHandled = false;
+    const formBc = new BroadcastChannel('shopify_oauth');
+
+    const formFinalize = (success, shop, error) => {
+      if (formHandled) return;
+      formHandled = true;
+      formBc.close();
+      window.removeEventListener('message', formMsgListener);
+      clearInterval(popupChecker);
+      connectBtn.classList.remove('btn-loading');
+      connectBtn.disabled = false;
+      if (success) {
+        showToast(`✅ ${shop} connected! Syncing data...`, 'success');
+        connectForm.reset();
+        document.getElementById('connect-modal')?.classList.remove('active');
+        setTimeout(loadStoresFromDB, 1500);
+      } else {
+        showToast(`❌ Error: ${error}`, 'error');
       }
     };
-    window.addEventListener('message', messageHandler);
 
-    // Fallback: if popup is closed manually, re-enable the button
+    formBc.onmessage = (e) => {
+      if (e.data.type === 'SHOPIFY_CONNECTED') formFinalize(e.data.success, e.data.shop, e.data.error);
+    };
+
+    const formMsgListener = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data.type === 'SHOPIFY_CONNECTED') formFinalize(event.data.success, event.data.shop, event.data.error);
+    };
+    window.addEventListener('message', formMsgListener);
+
+    // Re-enable button if popup is closed without completing
     const popupChecker = setInterval(() => {
       if (popup && popup.closed) {
         clearInterval(popupChecker);
-        window.removeEventListener('message', messageHandler);
-        connectBtn.classList.remove('btn-loading');
-        connectBtn.disabled = false;
+        if (!formHandled) {
+          formHandled = true;
+          formBc.close();
+          window.removeEventListener('message', formMsgListener);
+          connectBtn.classList.remove('btn-loading');
+          connectBtn.disabled = false;
+        }
       }
     }, 500);
   });
@@ -915,7 +929,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function isConnectIntent(msg) {
-    return /ربط|وصل|اضف|اربط|براند|متجر|شوبيفاي|connect|add.*(store|brand)|new.*(brand|store)/i.test(msg);
+    return /اربط|ربط.*(براند|متجر|شوبيفاي|store|brand)|وصل.*(براند|متجر|store)|اضف.*(براند|متجر|store|brand)|connect.*(store|brand|shopify)|add.*(store|brand)|new.*(brand|store)|link.*store/i.test(msg);
   }
 
   function isShowBrandsIntent(msg) {
@@ -1011,36 +1025,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     const popup = window.open(authUrl, 'shopify_oauth', 'width=600,height=700,top=100,left=100,scrollbars=yes');
     connectWizard.step = 'connecting';
 
-    const messageHandler = async (event) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data.type === 'SHOPIFY_CONNECTED') {
-        window.removeEventListener('message', messageHandler);
-        clearInterval(popupChecker);
-        connectWizard.active = false;
-        if (event.data.success) {
-          const shop = event.data.shop;
-          document.getElementById('connect-modal')?.classList.remove('active');
-          await loadStoresFromDB();
-          const store = connectedStores.find(s => s.domain === shop);
-          appendHomeMsg('ai', `
-            <div class="font-semibold text-green-700 mb-1">✅ تم الربط بنجاح!</div>
-            <div class="text-sm mb-3"><strong>${escHtml(shop)}</strong> متصل وبيتعمله sync دلوقتي...</div>
-            ${store ? `<button onclick="enterBrand('${store.id}')" class="btn btn-primary btn-sm">عرض البراند <i class="ph ph-arrow-right"></i></button>` : ''}
-          `);
-        } else {
-          appendHomeMsg('ai', `❌ فشل الربط: ${escHtml(event.data.error || 'Unknown error')}`);
-        }
+    let handled = false;
+    const bc = new BroadcastChannel('shopify_oauth');
+
+    const finalize = async (success, shop, error) => {
+      if (handled) return;
+      handled = true;
+      bc.close();
+      window.removeEventListener('message', msgListener);
+      clearInterval(popupChecker);
+      connectWizard.active = false;
+
+      if (success) {
+        document.getElementById('connect-modal')?.classList.remove('active');
+        await loadStoresFromDB();
+        const store = connectedStores.find(s => s.domain === shop);
+        appendHomeMsg('ai', `
+          <div class="font-semibold text-green-700 mb-1">✅ تم الربط بنجاح!</div>
+          <div class="text-sm mb-3"><strong>${escHtml(shop)}</strong> متصل وبيتعمله sync دلوقتي...</div>
+          ${store ? `<button onclick="enterBrand('${store.id}')" class="btn btn-primary btn-sm">عرض البراند <i class="ph ph-arrow-right"></i></button>` : ''}
+        `);
+      } else {
+        appendHomeMsg('ai', `❌ فشل الربط: ${escHtml(error || 'Unknown error')}`);
       }
     };
-    window.addEventListener('message', messageHandler);
+
+    bc.onmessage = (e) => {
+      if (e.data.type === 'SHOPIFY_CONNECTED') finalize(e.data.success, e.data.shop, e.data.error);
+    };
+
+    const msgListener = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data.type === 'SHOPIFY_CONNECTED') finalize(event.data.success, event.data.shop, event.data.error);
+    };
+    window.addEventListener('message', msgListener);
 
     const popupChecker = setInterval(() => {
       if (popup && popup.closed) {
         clearInterval(popupChecker);
-        window.removeEventListener('message', messageHandler);
-        if (connectWizard.step === 'connecting') {
+        if (!handled) {
+          handled = true;
+          bc.close();
+          window.removeEventListener('message', msgListener);
           connectWizard.active = false;
-          appendHomeMsg('ai', '❌ تم إغلاق الشاشة قبل الاتصال. حاول تاني.');
+          appendHomeMsg('ai', '❌ تم إغلاق الشاشة قبل اكتمال الربط. حاول تاني.');
         }
       }
     }, 500);

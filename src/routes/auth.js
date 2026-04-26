@@ -164,16 +164,14 @@ router.get('/auth/callback', async (req, res) => {
     <p style="color:#8b8b9e;">Syncing your data... This window will close automatically.</p>
   </div>
   <script>
-    if (window.opener) {
-      window.opener.postMessage({
-        type: 'SHOPIFY_CONNECTED',
-        success: true,
-        shop: '${shop}'
-      }, window.location.origin);
-      setTimeout(() => window.close(), 800);
-    } else {
-      setTimeout(() => { window.close(); }, 800);
-    }
+    (function() {
+      var data = { type: 'SHOPIFY_CONNECTED', success: true, shop: '${shop}' };
+      try { new BroadcastChannel('shopify_oauth').postMessage(data); } catch(_) {}
+      if (window.opener) {
+        try { window.opener.postMessage(data, window.location.origin); } catch(_) {}
+      }
+      setTimeout(function() { window.close(); }, 800);
+    })();
   </script>
 </body>
 </html>`;
@@ -191,14 +189,14 @@ router.get('/auth/callback', async (req, res) => {
     <p style="color:#f87171;">${err.message}</p>
   </div>
   <script>
-    if (window.opener) {
-      window.opener.postMessage({
-        type: 'SHOPIFY_CONNECTED',
-        success: false,
-        error: '${err.message.replace(/'/g, "\\'")}'
-      }, window.location.origin);
-    }
-    setTimeout(() => window.close(), 2500);
+    (function() {
+      var data = { type: 'SHOPIFY_CONNECTED', success: false, error: '${err.message.replace(/'/g, "\\'")}' };
+      try { new BroadcastChannel('shopify_oauth').postMessage(data); } catch(_) {}
+      if (window.opener) {
+        try { window.opener.postMessage(data, window.location.origin); } catch(_) {}
+      }
+      setTimeout(function() { window.close(); }, 2500);
+    })();
   </script>
 </body>
 </html>`;

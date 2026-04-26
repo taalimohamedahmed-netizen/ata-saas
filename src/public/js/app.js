@@ -177,7 +177,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('nav-brand-link')?.addEventListener('click', (e) => { e.preventDefault(); showHomeView(); });
 
     // Connect modal
-    document.getElementById('open-connect-modal-btn').addEventListener('click', () => {
+    document.getElementById('add-brand-chip-btn')?.addEventListener('click', () => {
+      document.getElementById('connect-modal').classList.add('active');
+    });
+    document.getElementById('open-connect-modal-btn')?.addEventListener('click', () => {
       document.getElementById('connect-modal').classList.add('active');
     });
     document.getElementById('close-connect-modal-btn').addEventListener('click', () => {
@@ -329,6 +332,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (connectedStores.length === 1) select.value = connectedStores[0].id;
   }
 
+  function renderBrandChips() {
+    const strip = document.getElementById('brands-strip');
+    const chips = document.getElementById('brand-chips');
+    if (!strip || !chips) return;
+    if (connectedStores.length === 0) { strip.classList.add('hidden'); return; }
+    strip.classList.remove('hidden');
+    chips.innerHTML = connectedStores.map(s => `
+      <button onclick="enterBrand('${s.id}')" class="flex items-center gap-1.5 px-3 py-1 rounded-full border border-border bg-white text-xs font-medium text-foreground hover:border-primary/60 hover:text-primary transition-colors flex-shrink-0">
+        <span class="w-4 h-4 rounded bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center">${s.domain.charAt(0).toUpperCase()}</span>
+        ${escHtml(s.domain.replace('.myshopify.com', ''))}
+      </button>
+    `).join('');
+  }
+
   function renderStores() {
     brandCardsContainer.innerHTML = '';
 
@@ -380,6 +397,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     addCard.innerHTML = '<i class="ph ph-plus-circle text-4xl mb-2"></i><span class="font-medium text-sm">Deploy New Environment</span>';
     addCard.addEventListener('click', () => document.getElementById('connect-modal').classList.add('active'));
     brandCardsContainer.appendChild(addCard);
+
+    renderBrandChips();
   }
 
   async function loadCardStats(platformId) {
@@ -838,53 +857,273 @@ document.addEventListener('DOMContentLoaded', async () => {
   let homeChatHistory = [];
   let brandChatHistory = [];
 
-  // Home chat UI interactions (elements may not exist in current layout)
-  const homeChatPanel = document.getElementById('home-chat-panel');
   const homeChatInput = document.getElementById('home-chat-input');
-  const closeChatBtn = document.getElementById('close-chat-btn');
 
-  homeChatInput?.addEventListener('focus', () => {
-    if (homeChatPanel?.classList.contains('collapsed')) {
-      homeChatPanel.classList.remove('collapsed');
-      homeChatPanel.classList.add('expanded');
-    }
+  // Textarea auto-resize
+  homeChatInput?.addEventListener('input', () => {
+    homeChatInput.style.height = 'auto';
+    homeChatInput.style.height = Math.min(homeChatInput.scrollHeight, 112) + 'px';
   });
 
-  closeChatBtn?.addEventListener('click', () => {
-    homeChatPanel?.classList.remove('expanded');
-    homeChatPanel?.classList.add('collapsed');
-  });
-
-  // Home chat
   document.getElementById('home-chat-send-btn')?.addEventListener('click', sendHomeChatMessage);
   homeChatInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendHomeChatMessage(); }
   });
+
+  // ── Connect Wizard State ──────────────────────────────────────
+  const connectWizard = { active: false, step: null, domain: '', clientId: '', clientSecret: '' };
+
+  window.sendSuggestion = function(text) {
+    const input = document.getElementById('home-chat-input');
+    if (input) { input.value = text; input.dispatchEvent(new Event('input')); }
+    sendHomeChatMessage();
+  };
+
+  function appendHomeMsg(role, htmlText) {
+    const list = document.getElementById('home-chat-list');
+    if (!list) return null;
+    const welcome = document.getElementById('home-welcome-screen');
+    if (welcome && welcome.style.display !== 'none') welcome.style.display = 'none';
+    const wrapper = document.createElement('div');
+    wrapper.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+    const bubble = document.createElement('div');
+    bubble.className = role === 'user' ? 'home-chat-bubble-user' : 'home-chat-bubble-ai';
+    bubble.innerHTML = htmlText;
+    wrapper.appendChild(bubble);
+    list.appendChild(wrapper);
+    const msgs = document.getElementById('home-chat-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    return bubble;
+  }
+
+  function appendHomeTyping() {
+    const list = document.getElementById('home-chat-list');
+    if (!list) return null;
+    const welcome = document.getElementById('home-welcome-screen');
+    if (welcome && welcome.style.display !== 'none') welcome.style.display = 'none';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'flex justify-start';
+    wrapper.innerHTML = `<div class="home-chat-bubble-ai flex gap-1 items-center">
+      <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style="animation-delay:0.1s"></span>
+      <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce" style="animation-delay:0.2s"></span>
+    </div>`;
+    list.appendChild(wrapper);
+    const msgs = document.getElementById('home-chat-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    return wrapper;
+  }
+
+  function isConnectIntent(msg) {
+    return /ربط|وصل|اضف|اربط|براند|متجر|شوبيفاي|connect|add.*(store|brand)|new.*(brand|store)/i.test(msg);
+  }
+
+  function isShowBrandsIntent(msg) {
+    return /وريني|اعرض|شوف.*براند|الـ? ?brands|المتاجر|show.*brand|list.*store/i.test(msg);
+  }
+
+  function startConnectWizard() {
+    connectWizard.active = true;
+    connectWizard.step = 'domain';
+    connectWizard.domain = '';
+    connectWizard.clientId = '';
+    connectWizard.clientSecret = '';
+    appendHomeMsg('ai', `
+      <div class="font-semibold mb-1">🔗 ربط متجر Shopify جديد</div>
+      <div class="text-sm text-muted-foreground mb-3">هوريك خطوة بخطوة — دقيقتين وتبقا جاهز.</div>
+      <div class="text-sm">أولاً، هاتلي <strong>domain بتاع المتجر</strong></div>
+      <div class="text-xs text-muted-foreground mt-1 font-mono">مثال: mystore.myshopify.com أو اكتب mystore بس</div>
+    `);
+  }
+
+  async function handleWizardStep(msg) {
+    const typing = appendHomeTyping();
+    await new Promise(r => setTimeout(r, 500));
+    typing?.remove();
+
+    if (connectWizard.step === 'domain') {
+      let domain = msg.trim().toLowerCase().replace(/\s/g, '');
+      if (!domain.includes('.myshopify.com')) domain += '.myshopify.com';
+      if (!/^[a-zA-Z0-9\-]+\.myshopify\.com$/.test(domain)) {
+        appendHomeMsg('ai', '❌ الـ domain مش صح. مثال: <strong>mystore.myshopify.com</strong>');
+        return;
+      }
+      connectWizard.domain = domain;
+      connectWizard.step = 'clientId';
+      appendHomeMsg('ai', `
+        <div class="text-sm">✅ <strong>${escHtml(domain)}</strong> — تمام!</div>
+        <div class="text-sm mt-2">دلوقتي محتاج <strong>Client ID</strong> من Shopify Partners.</div>
+        <div class="text-xs text-muted-foreground mt-2 leading-relaxed">
+          <strong>إزاي تجيبه:</strong><br>
+          1. روح <strong>partners.shopify.com</strong><br>
+          2. Apps → اختار تطبيقك<br>
+          3. App setup → Client credentials
+        </div>
+      `);
+    } else if (connectWizard.step === 'clientId') {
+      if (msg.trim().length < 10) {
+        appendHomeMsg('ai', '❌ الـ Client ID مش صح — لازم يكون أطول. جرب تاني.');
+        return;
+      }
+      connectWizard.clientId = msg.trim();
+      connectWizard.step = 'clientSecret';
+      appendHomeMsg('ai', `<div class="text-sm">✅ Client ID محفوظ.</div><div class="text-sm mt-2">آخر حاجة — هاتلي <strong>Client Secret</strong> من نفس صفحة Client credentials.</div>`);
+    } else if (connectWizard.step === 'clientSecret') {
+      if (msg.trim().length < 10) {
+        appendHomeMsg('ai', '❌ الـ Client Secret مش صح — لازم يكون أطول. جرب تاني.');
+        return;
+      }
+      connectWizard.clientSecret = msg.trim();
+      connectWizard.step = 'confirm';
+      showConnectConfirm();
+    } else if (connectWizard.step === 'confirm') {
+      if (/اه|ايوه|yes|confirm|تمام|يلا|اوك|ok/i.test(msg)) {
+        window.triggerWizardConnect();
+      } else if (/لا|cancel|no|الغاء/i.test(msg)) {
+        window.cancelWizard();
+      } else {
+        appendHomeMsg('ai', 'اضغط <strong>Confirm & Connect</strong> للمتابعة أو <strong>Cancel</strong> للإلغاء.');
+      }
+    }
+  }
+
+  function showConnectConfirm() {
+    appendHomeMsg('ai', `
+      <div class="text-sm font-semibold mb-2">🚀 كل حاجة جاهزة!</div>
+      <div class="bg-black/5 rounded-lg p-3 text-xs font-mono mb-3 space-y-1">
+        <div><span class="text-muted-foreground">Domain:</span> ${escHtml(connectWizard.domain)}</div>
+        <div><span class="text-muted-foreground">Client ID:</span> ${escHtml(connectWizard.clientId.slice(0, 8))}...</div>
+        <div><span class="text-muted-foreground">Client Secret:</span> ••••••••</div>
+      </div>
+      <div class="text-xs text-muted-foreground mb-3">⚠️ تأكد إن <code class="bg-black/10 px-1 rounded">${window.location.origin}/auth/callback</code> مضاف في Redirect URLs في Shopify Partners.</div>
+      <div class="flex gap-2">
+        <button onclick="triggerWizardConnect()" class="btn btn-primary btn-sm">🔗 Confirm & Connect</button>
+        <button onclick="cancelWizard()" class="btn btn-secondary btn-sm">Cancel</button>
+      </div>
+    `);
+  }
+
+  window.triggerWizardConnect = function() {
+    const ownerId = document.getElementById('owner-id')?.value;
+    if (!ownerId) { showToast('Not logged in', 'error'); return; }
+    appendHomeMsg('ai', '⏳ بيفتح شاشة Shopify...');
+    const authUrl = `/auth?shop=${encodeURIComponent(connectWizard.domain)}&owner_id=${encodeURIComponent(ownerId)}&client_id=${encodeURIComponent(connectWizard.clientId)}&client_secret=${encodeURIComponent(connectWizard.clientSecret)}`;
+    const popup = window.open(authUrl, 'shopify_oauth', 'width=600,height=700,top=100,left=100,scrollbars=yes');
+    connectWizard.step = 'connecting';
+
+    const messageHandler = async (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data.type === 'SHOPIFY_CONNECTED') {
+        window.removeEventListener('message', messageHandler);
+        clearInterval(popupChecker);
+        connectWizard.active = false;
+        if (event.data.success) {
+          const shop = event.data.shop;
+          document.getElementById('connect-modal')?.classList.remove('active');
+          await loadStoresFromDB();
+          const store = connectedStores.find(s => s.domain === shop);
+          appendHomeMsg('ai', `
+            <div class="font-semibold text-green-700 mb-1">✅ تم الربط بنجاح!</div>
+            <div class="text-sm mb-3"><strong>${escHtml(shop)}</strong> متصل وبيتعمله sync دلوقتي...</div>
+            ${store ? `<button onclick="enterBrand('${store.id}')" class="btn btn-primary btn-sm">عرض البراند <i class="ph ph-arrow-right"></i></button>` : ''}
+          `);
+        } else {
+          appendHomeMsg('ai', `❌ فشل الربط: ${escHtml(event.data.error || 'Unknown error')}`);
+        }
+      }
+    };
+    window.addEventListener('message', messageHandler);
+
+    const popupChecker = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(popupChecker);
+        window.removeEventListener('message', messageHandler);
+        if (connectWizard.step === 'connecting') {
+          connectWizard.active = false;
+          appendHomeMsg('ai', '❌ تم إغلاق الشاشة قبل الاتصال. حاول تاني.');
+        }
+      }
+    }, 500);
+  };
+
+  window.cancelWizard = function() {
+    connectWizard.active = false;
+    connectWizard.step = null;
+    appendHomeMsg('ai', '👌 تمام! لو محتاج تربط متجر في أي وقت، قولي.');
+  };
+
+  function showBrandsInChat() {
+    if (connectedStores.length === 0) {
+      appendHomeMsg('ai', '🏪 مفيش متاجر متصلة لحد دلوقتي. قولي "عايز أربط براند" وهساعدك!');
+      return;
+    }
+    const cards = connectedStores.map(s => `
+      <button onclick="enterBrand('${s.id}')" class="flex items-center gap-3 w-full bg-white border border-border rounded-lg px-4 py-3 hover:border-primary/50 hover:bg-primary/5 transition-all text-left">
+        <div class="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center font-bold text-sm flex-shrink-0">${s.domain.charAt(0).toUpperCase()}</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-sm text-foreground truncate">${escHtml(s.domain)}</div>
+          <div class="text-xs text-muted-foreground">${s.lastSynced ? 'Synced: ' + s.lastSynced : 'Never synced'}</div>
+        </div>
+        <i class="ph ph-arrow-right text-muted-foreground"></i>
+      </button>
+    `).join('');
+    appendHomeMsg('ai', `
+      <div class="font-semibold mb-2">🏪 الـ Brands المتصلة (${connectedStores.length})</div>
+      <div class="space-y-2">${cards}</div>
+    `);
+  }
+
+  window.enterBrand = function(storeId) {
+    const store = connectedStores.find(s => s.id === storeId);
+    if (store) showBrandView(store);
+  };
+
+  async function sendToHomeAI(message) {
+    const typingEl = appendHomeTyping();
+    try {
+      const res = await authFetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, history: homeChatHistory }),
+      });
+      const data = await res.json();
+      typingEl?.remove();
+      if (data.error) throw new Error(data.error);
+      appendHomeMsg('ai', escHtml(data.reply).replace(/\n/g, '<br>'));
+      homeChatHistory.push({ role: 'user', content: message }, { role: 'assistant', content: data.reply });
+      if (homeChatHistory.length > 20) homeChatHistory = homeChatHistory.slice(-20);
+    } catch (err) {
+      typingEl?.remove();
+      appendHomeMsg('ai', '❌ ' + escHtml(err.message));
+    }
+  }
 
   async function sendHomeChatMessage() {
     const input = document.getElementById('home-chat-input');
     if (!input) return;
     const message = input.value.trim();
     if (!message) return;
-    const platformId = document.getElementById('home-chat-store-select')?.value;
-    if (!platformId) { showToast('اختار براند الأول', 'error'); return; }
     input.value = '';
-    appendMsg('home-chat-messages', 'user', message);
+    input.style.height = 'auto';
+
+    appendHomeMsg('user', escHtml(message));
+
     const btn = document.getElementById('home-chat-send-btn');
     if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
     input.disabled = true;
-    const typingEl = appendTypingTo('home-chat-messages');
+
     try {
-      const res = await authFetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ message, history:homeChatHistory, platformId }) });
-      const data = await res.json();
-      typingEl?.remove();
-      if (data.error) throw new Error(data.error);
-      appendMsg('home-chat-messages', 'ai', data.reply);
-      homeChatHistory.push({ role:'user', content:message }, { role:'assistant', content:data.reply });
-      if (homeChatHistory.length > 20) homeChatHistory = homeChatHistory.slice(-20);
-    } catch (err) {
-      typingEl?.remove();
-      appendMsg('home-chat-messages', 'ai', '❌ Error: ' + err.message);
+      if (connectWizard.active) {
+        await handleWizardStep(message);
+      } else if (isConnectIntent(message)) {
+        await new Promise(r => setTimeout(r, 300));
+        startConnectWizard();
+      } else if (isShowBrandsIntent(message)) {
+        await new Promise(r => setTimeout(r, 300));
+        showBrandsInChat();
+      } else {
+        await sendToHomeAI(message);
+      }
     } finally {
       if (btn) { btn.classList.remove('btn-loading'); btn.disabled = false; }
       input.disabled = false;

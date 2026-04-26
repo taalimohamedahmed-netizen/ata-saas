@@ -111,7 +111,7 @@ router.get('/auth/callback', async (req, res) => {
       }
     );
 
-    const { access_token, scope } = tokenResponse.data;
+    const { access_token } = tokenResponse.data;
 
     if (!access_token) {
       throw new Error('Shopify did not return an access_token');
@@ -170,8 +170,10 @@ router.get('/auth/callback', async (req, res) => {
         success: true,
         shop: '${shop}'
       }, window.location.origin);
+      setTimeout(() => window.close(), 800);
+    } else {
+      setTimeout(() => { window.close(); }, 800);
     }
-    setTimeout(() => window.close(), 1500);
   </script>
 </body>
 </html>`;

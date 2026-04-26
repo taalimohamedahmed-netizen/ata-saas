@@ -102,9 +102,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (successMsg) { showToast(successMsg, 'success'); window.history.replaceState({}, document.title, window.location.pathname); }
     if (errorMsg) { showToast(errorMsg, 'error'); window.history.replaceState({}, document.title, window.location.pathname); }
 
-    // Show home view
-    showHomeView();
-    loadStoresFromDB();
+    // Save hash before showHomeView overwrites it
+    const _savedHash = location.hash;
+    showHomeView({ skipHash: true });
+    loadStoresFromDB(_savedHash);
 
     // Setup navigation
     setupNavigation();
@@ -114,13 +115,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     history.replaceState(null, '', '#' + hash);
   }
 
-  function showHomeView() {
+  function showHomeView({ skipHash = false } = {}) {
     viewHome.style.display = 'block';
     viewBrand.style.display = 'none';
     document.getElementById('back-to-home-btn').style.display = 'none';
     document.getElementById('brand-nav-label').style.display = 'none';
     if (window.hideBrandNavItems) window.hideBrandNavItems();
-    setAppHash('home');
+    stopMessagePolling();
+    if (!skipHash) setAppHash('home');
   }
 
   function showBrandView(store) {
@@ -147,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('tab-orders').style.display = 'block';
     loadOrders(store.id);
     tabLoaded.orders = true;
-    setAppHash('brand/' + store.id + '/orders');
+    setAppHash('brand/' + encodeURIComponent(store.domain) + '/orders');
 
     // Sync buttons
     document.getElementById('bv-full-sync-btn').onclick = () => { startFullSync(store.id, store.domain, !!store.lastSynced); };
@@ -268,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // --- Load Stores from Database ---
-  async function loadStoresFromDB() {
+  async function loadStoresFromDB(savedHash = '') {
     try {
       const res = await authFetch('/api/stores');
       const data = await res.json();
@@ -281,19 +283,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         }));
         renderStores();
         populateHomeChatSelect();
-        restoreFromHash();
+        restoreFromHash(savedHash || location.hash);
       }
     } catch (err) {
       console.error('Failed to load stores:', err);
     }
   }
 
-  function restoreFromHash() {
-    const hash = location.hash.replace('#', '');
-    if (!hash || hash === 'home') return;
-    const parts = hash.split('/');
+  function restoreFromHash(hash) {
+    const h = (hash || location.hash).replace('#', '');
+    if (!h || h === 'home') return;
+    const parts = h.split('/');
     if (parts[0] !== 'brand' || !parts[1]) return;
-    const store = connectedStores.find(s => s.id === parts[1]);
+    const domain = decodeURIComponent(parts[1]);
+    // Match by domain OR by id (backward compat)
+    const store = connectedStores.find(s => s.domain === domain || s.id === domain);
     if (!store) return;
     showBrandView(store);
     const tab = parts[2];
@@ -301,7 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTimeout(() => {
         const tabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
         if (tabBtn) tabBtn.click();
-      }, 0);
+      }, 50);
     }
   }
 
@@ -443,7 +447,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.classList.add('active');
       const tab = btn.dataset.tab;
       document.getElementById(`tab-${tab}`).style.display = 'block';
-      if (currentBrandId) setAppHash('brand/' + currentBrandId + '/' + tab);
+      if (currentBrandId) {
+        const s = connectedStores.find(x => x.id === currentBrandId);
+        if (s) setAppHash('brand/' + encodeURIComponent(s.domain) + '/' + tab);
+      }
 
       if (!currentBrandId) return;
       if (tab === 'chat') {
@@ -904,6 +911,48 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ═══════════════ INBOX ═══════════════
   let currentConversationId = null;
+  let _msgPollingTimer = null;
+
+  function startMessagePolling(conv) {
+    stopMessagePolling();
+    _msgPollingTimer = setInterval(async () => {
+      if (!currentConversationId) return;
+      try {
+        const res = await authFetch(`/api/conversations/${currentConversationId}/messages`);
+        const data = await res.json();
+        const msgs = data.messages || [];
+        const messagesEl = document.getElementById('inbox-messages');
+        if (!messagesEl) return;
+        // Only re-render if count changed
+        const current = messagesEl.querySelectorAll('.inbox-msg').length;
+        if (msgs.length !== current) {
+          messagesEl.innerHTML = '';
+          msgs.forEach(msg => {
+            const isOut = msg.direction === 'outbound';
+            const time  = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const wrapper = document.createElement('div');
+            wrapper.className = `inbox-msg ${isOut ? 'inbox-msg-out' : 'inbox-msg-in'}`;
+            wrapper.innerHTML = `
+              <div class="${isOut ? 'inbox-bubble-out' : 'inbox-bubble-in'}">${renderMsgBody(msg.body)}</div>
+              <div class="inbox-msg-time">${isOut ? 'You · ' : ''}${time}</div>
+            `;
+            messagesEl.appendChild(wrapper);
+          });
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          // Update sidebar preview
+          if (msgs.length > 0) {
+            const last = msgs[msgs.length - 1];
+            const preview = document.querySelector(`.inbox-conv-item[data-id="${currentConversationId}"] .inbox-conv-preview`);
+            if (preview) preview.textContent = last.body.slice(0, 45);
+          }
+        }
+      } catch (_) {}
+    }, 4000);
+  }
+
+  function stopMessagePolling() {
+    if (_msgPollingTimer) { clearInterval(_msgPollingTimer); _msgPollingTimer = null; }
+  }
 
   async function loadInbox(platformId) {
     const convList = document.getElementById('inbox-conv-list');
@@ -1046,6 +1095,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await loadMessages(conv.id);
+    startMessagePolling(conv);
   }
 
   async function loadMessages(conversationId) {

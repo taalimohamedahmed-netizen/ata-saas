@@ -349,7 +349,7 @@ router.post('/whatsapp', express.json(), async (req, res) => {
     // Find or create conversation (with state + context + ai_enabled)
     let { data: conv } = await supabase
       .from('whatsapp_conversations')
-      .select('id, state, context, ai_enabled, platform_id')
+      .select('id, state, context, ai_enabled, platform_id, customer_phone')
       .eq('customer_phone', customerPhone)
       .order('last_message_at', { ascending: false })
       .limit(1)
@@ -371,7 +371,7 @@ router.post('/whatsapp', express.json(), async (req, res) => {
             last_message: body, last_message_at: new Date().toISOString(), state: 'idle', context: {} },
           { onConflict: 'platform_id,customer_phone' }
         )
-        .select('id, state, context, ai_enabled, platform_id')
+        .select('id, state, context, ai_enabled, platform_id, customer_phone')
         .single();
 
       conv = newConv;

@@ -45,7 +45,7 @@ export function LoginForm() {
     setServerError(null);
     try {
       const res = await loginUser(data.email, data.password);
-      setAuth(res.access_token, res.tenant_id, res.name);
+      setAuth(res.access_token, String(res.tenant_id), res.name);
       toast.success("تم تسجيل الدخول بنجاح! 🎉");
       router.push("/dashboard");
     } catch (err: unknown) {

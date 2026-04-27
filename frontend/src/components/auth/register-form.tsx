@@ -50,7 +50,7 @@ export function RegisterForm() {
     setServerError(null);
     try {
       const res = await registerUser(data.name, data.email, data.password);
-      setAuth(res.access_token, res.tenant_id, res.name);
+      setAuth(res.access_token, String(res.tenant_id), res.name);
       toast.success("تم إنشاء الحساب بنجاح! 🎉");
       router.push("/dashboard");
     } catch (err: unknown) {

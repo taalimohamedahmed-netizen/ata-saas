@@ -53,6 +53,7 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     tenant_id: int
+    name: str
 
 
 class ShopifyConnectIn(BaseModel):
@@ -149,7 +150,7 @@ async def register(payload: RegisterIn, db: AsyncSession = Depends(get_db)):
 
     log.info("Tenant registered id=%s email=%s", tenant.id, tenant.email)
     token = create_access_token(tenant.id)
-    return TokenOut(access_token=token, tenant_id=tenant.id)
+    return TokenOut(access_token=token, tenant_id=tenant.id, name=tenant.name)
 
 
 @router.post("/login", response_model=TokenOut)
@@ -168,7 +169,7 @@ async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=403, detail="tenant_disabled")
 
     token = create_access_token(tenant.id)
-    return TokenOut(access_token=token, tenant_id=tenant.id)
+    return TokenOut(access_token=token, tenant_id=tenant.id, name=tenant.name)
 
 
 @router.get("/me", response_model=TenantOut)

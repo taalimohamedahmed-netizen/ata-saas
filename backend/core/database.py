@@ -1,11 +1,15 @@
 """
-Async PostgreSQL (SQLAlchemy 2.x) + Redis connection management.
+Async database + Redis connection management.
+
+Supports:
+  - PostgreSQL (production) via asyncpg
+  - SQLite (local dev) via aiosqlite — auto-detected from DATABASE_URL
 
 Exposes:
   - Base               → declarative base for all models
   - engine, SessionLocal → SQLAlchemy async engine + session factory
   - get_db()           → FastAPI dependency yielding an AsyncSession
-  - get_redis()        → FastAPI dependency yielding a Redis client
+  - get_redis()        → FastAPI dependency yielding a Redis client (or None)
   - init_connections() / close_connections() → lifecycle hooks
 """
 
@@ -15,7 +19,6 @@ import logging
 import os
 from typing import AsyncGenerator
 
-import redis.asyncio as redis_async
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -30,9 +33,12 @@ log = logging.getLogger("ata.db")
 # --------------------------------------------------------------------------
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/ata",
+    # Default: local SQLite file for zero-config dev
+    "sqlite+aiosqlite:///./ata_dev.db",
 )
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 
 
 # --------------------------------------------------------------------------
@@ -42,13 +48,16 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
 
 
-engine = create_async_engine(
-    DATABASE_URL,
+_engine_kwargs: dict = dict(
     echo=False,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
 )
+
+# SQLite doesn't support connection pool sizing
+if not _is_sqlite:
+    _engine_kwargs.update(pool_size=10, max_overflow=20)
+
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
 SessionLocal = async_sessionmaker(
     engine,
@@ -69,20 +78,28 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # --------------------------------------------------------------------------
-# Redis
+# Redis (optional — gracefully skip if not available)
 # --------------------------------------------------------------------------
-_redis_client: redis_async.Redis | None = None
+_redis_client = None
+_redis_available = False
 
 
-async def get_redis() -> redis_async.Redis:
-    """Return a singleton async Redis client."""
+async def get_redis():
+    """Return a singleton async Redis client, or None if unavailable."""
     global _redis_client
+    if not _redis_available:
+        return None
     if _redis_client is None:
-        _redis_client = redis_async.from_url(
-            REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-        )
+        try:
+            import redis.asyncio as redis_async
+
+            _redis_client = redis_async.from_url(
+                REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+        except Exception:
+            return None
     return _redis_client
 
 
@@ -91,6 +108,8 @@ async def get_redis() -> redis_async.Redis:
 # --------------------------------------------------------------------------
 async def init_connections() -> None:
     """Verify DB + Redis are reachable. Import models so tables register."""
+    global _redis_available
+
     # Import models here so SQLAlchemy registers them on Base.metadata.
     from models import conversation, customer, order, tenant  # noqa: F401
 
@@ -98,12 +117,24 @@ async def init_connections() -> None:
     if os.getenv("APP_ENV", "development") == "development":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        log.info("Dev mode: auto-created tables via Base.metadata.create_all")
+        log.info(
+            "Dev mode: auto-created tables via Base.metadata.create_all (%s)",
+            "SQLite" if _is_sqlite else "PostgreSQL",
+        )
 
-    # Smoke-test Redis.
-    client = await get_redis()
-    await client.ping()
-    log.info("Redis ping OK")
+    # Smoke-test Redis (optional).
+    try:
+        import redis.asyncio as redis_async  # noqa: F811
+
+        client = redis_async.from_url(
+            REDIS_URL, encoding="utf-8", decode_responses=True
+        )
+        await client.ping()
+        _redis_available = True
+        log.info("Redis ping OK")
+    except Exception as exc:
+        _redis_available = False
+        log.warning("Redis not available (%s) — running without cache.", exc)
 
 
 async def close_connections() -> None:

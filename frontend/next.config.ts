@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
+
   // Proxy API calls to FastAPI backend during development
   async rewrites() {
     return [

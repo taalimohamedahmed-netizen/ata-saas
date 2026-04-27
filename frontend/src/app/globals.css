@@ -1,0 +1,107 @@
+/* ─── Google Fonts ─── */
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap");
+
+@import "tailwindcss";
+
+/* ─── Tailwind v4 Theme ─── */
+@theme inline {
+  /* Brand colors */
+  --color-navy: #0A0F1E;
+  --color-navy-light: #0F172A;
+  --color-navy-card: #1E293B;
+  --color-accent: #3B82F6;
+  --color-accent-hover: #2563EB;
+  --color-gold: #F59E0B;
+  --color-gold-hover: #D97706;
+  --color-surface: #1E293B;
+  --color-border: #334155;
+  --color-muted: #94A3B8;
+  --color-danger: #EF4444;
+  --color-success: #22C55E;
+
+  /* Fonts */
+  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-arabic: "IBM Plex Sans Arabic", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+/* ─── Base ─── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-navy);
+  color: #F1F5F9;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+
+/* ─── Focus rings ─── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ─── Selection ─── */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+/* ─── Animated gradient mesh for auth brand panel ─── */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.gradient-mesh {
+  background: linear-gradient(
+    135deg,
+    #0A0F1E 0%,
+    #1E1B4B 25%,
+    #0A0F1E 50%,
+    #172554 75%,
+    #0A0F1E 100%
+  );
+  background-size: 400% 400%;
+  animation: gradient-shift 15s ease infinite;
+}
+
+/* ─── Subtle glow effect ─── */
+.glow-accent {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15),
+              0 0 60px rgba(59, 130, 246, 0.05);
+}
+
+/* ─── Arabic text helper ─── */
+.text-arabic {
+  font-family: var(--font-arabic);
+  direction: rtl;
+}

@@ -1,0 +1,118 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  LayoutDashboard,
+  MessageSquare,
+  ShoppingCart,
+  Users,
+  Settings,
+  LogOut,
+  Bot,
+} from "lucide-react";
+import { useAuthStore } from "@/store/auth-store";
+
+const navItems = [
+  { icon: LayoutDashboard, label: "لوحة التحكم", href: "/dashboard" },
+  { icon: MessageSquare, label: "المحادثات", href: "/dashboard", disabled: true },
+  { icon: ShoppingCart, label: "الطلبات", href: "/dashboard", disabled: true },
+  { icon: Users, label: "العملاء", href: "/dashboard", disabled: true },
+  { icon: Settings, label: "الإعدادات", href: "/dashboard", disabled: true },
+];
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { isAuthenticated, tenantName, logout } = useAuthStore();
+
+  useEffect(() => {
+    // Client-side auth guard
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-navy">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-navy">
+      {/* ═══════ SIDEBAR ═══════ */}
+      <aside className="flex w-16 flex-col items-center border-r border-border bg-navy-light py-4 lg:w-56 lg:items-stretch lg:px-3">
+        {/* Logo */}
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 lg:w-full lg:gap-3 lg:px-3 mb-6">
+          <Bot className="h-5 w-5 text-accent shrink-0" />
+          <span className="hidden lg:block text-lg font-extrabold text-white tracking-tight">
+            ATA
+          </span>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex flex-1 flex-col gap-1">
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              disabled={item.disabled}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed lg:w-full lg:gap-3 lg:px-3 lg:justify-start"
+              title={item.label}
+            >
+              <item.icon className="h-5 w-5 shrink-0" />
+              <span
+                className="hidden lg:block text-sm"
+                style={{
+                  fontFamily: '"IBM Plex Sans Arabic", sans-serif',
+                }}
+              >
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        {/* User / Logout */}
+        <div className="mt-auto space-y-2">
+          <div className="hidden lg:block px-3">
+            <p
+              className="text-xs text-muted truncate"
+              style={{
+                fontFamily: '"IBM Plex Sans Arabic", sans-serif',
+              }}
+            >
+              {tenantName || "المتجر"}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              logout();
+              router.replace("/login");
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger/10 hover:text-danger lg:w-full lg:gap-3 lg:px-3 lg:justify-start"
+            title="تسجيل الخروج"
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            <span
+              className="hidden lg:block text-sm"
+              style={{
+                fontFamily: '"IBM Plex Sans Arabic", sans-serif',
+              }}
+            >
+              تسجيل الخروج
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ═══════ MAIN ═══════ */}
+      <main className="flex-1 overflow-y-auto">{children}</main>
+    </div>
+  );
+}

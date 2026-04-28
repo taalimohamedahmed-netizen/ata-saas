@@ -321,15 +321,15 @@ async def shopify_sync(
     # ── Fetch from Shopify ──────────────────────────────────
     try:
         log.info("Fetching products...")
-        shopify_products = await svc.sync_products(max_products=500)
+        shopify_products = await svc.sync_products(max_products=50)
         log.info("Fetched %s products", len(shopify_products))
         
         log.info("Fetching orders...")
-        shopify_orders = await svc.sync_orders(max_orders=500)
+        shopify_orders = await svc.sync_orders(max_orders=50)
         log.info("Fetched %s orders", len(shopify_orders))
         
         log.info("Fetching customers...")
-        shopify_customers = await svc.sync_customers(max_customers=500)
+        shopify_customers = await svc.sync_customers(max_customers=50)
         log.info("Fetched %s customers", len(shopify_customers))
     except Exception as exc:
         log.exception("Shopify sync fetch failed: %s", exc)

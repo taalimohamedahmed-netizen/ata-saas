@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -15,10 +16,10 @@ import { useAuthStore } from "@/store/auth-store";
 
 const navItems = [
   { icon: LayoutDashboard, label: "لوحة التحكم", href: "/dashboard" },
-  { icon: MessageSquare, label: "المحادثات", href: "/dashboard", disabled: true },
-  { icon: ShoppingCart, label: "الطلبات", href: "/dashboard", disabled: true },
-  { icon: Users, label: "العملاء", href: "/dashboard", disabled: true },
-  { icon: Settings, label: "الإعدادات", href: "/dashboard", disabled: true },
+  { icon: MessageSquare, label: "المحادثات", href: "/dashboard/conversations", disabled: true },
+  { icon: ShoppingCart, label: "الطلبات", href: "/dashboard/orders", disabled: true },
+  { icon: Users, label: "العملاء", href: "/dashboard/customers", disabled: true },
+  { icon: Settings, label: "الإعدادات", href: "/dashboard/settings/integrations" },
 ];
 
 export default function DashboardLayout({
@@ -27,6 +28,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, tenantName, logout } = useAuthStore();
 
   useEffect(() => {
@@ -58,24 +60,22 @@ export default function DashboardLayout({
 
         {/* Nav Items */}
         <nav className="flex flex-1 flex-col gap-1">
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              disabled={item.disabled}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed lg:w-full lg:gap-3 lg:px-3 lg:justify-start"
-              title={item.label}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              <span
-                className="hidden lg:block text-sm"
-                style={{
-                  fontFamily: '"IBM Plex Sans Arabic", sans-serif',
-                }}
-              >
-                {item.label}
-              </span>
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const base = "flex h-10 w-10 items-center justify-center rounded-lg transition-colors lg:w-full lg:gap-3 lg:px-3 lg:justify-start";
+            const active = "bg-accent/15 text-accent";
+            const inactive = "text-muted hover:bg-white/5 hover:text-white";
+            const disabled = "opacity-40 cursor-not-allowed pointer-events-none";
+            const cls = `${base} ${item.disabled ? disabled : isActive ? active : inactive}`;
+            return (
+              <Link key={item.label} href={item.disabled ? "#" : item.href} className={cls} title={item.label} aria-disabled={item.disabled}>
+                <item.icon className="h-5 w-5 shrink-0" />
+                <span className="hidden lg:block text-sm" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
         </nav>
 
         {/* User / Logout */}

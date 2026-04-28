@@ -141,6 +141,32 @@ class ShopifyService:
         return data.get("products", [])
 
     # ----------------------------------------------------------------
+    # Webhook management
+    # ----------------------------------------------------------------
+    async def list_webhooks(self) -> list[dict[str, Any]]:
+        """Return all webhooks registered for this store."""
+        data = await self._request("GET", "/webhooks.json")
+        return data.get("webhooks", [])
+
+    async def register_webhook(self, topic: str, address: str) -> dict[str, Any]:
+        """Register a webhook. Returns the created webhook dict."""
+        body = {"webhook": {"topic": topic, "address": address, "format": "json"}}
+        data = await self._request("POST", "/webhooks.json", json_body=body)
+        return data.get("webhook", {})
+
+    async def delete_webhook(self, webhook_id: str | int) -> None:
+        """Delete a webhook by ID."""
+        await self._request("DELETE", f"/webhooks/{webhook_id}.json")
+
+    async def find_webhook(self, topic: str) -> dict[str, Any] | None:
+        """Find an existing webhook by topic, or return None."""
+        webhooks = await self.list_webhooks()
+        for wh in webhooks:
+            if wh.get("topic") == topic:
+                return wh
+        return None
+
+    # ----------------------------------------------------------------
     # Webhook verification (HMAC-SHA256)
     # ----------------------------------------------------------------
     @staticmethod

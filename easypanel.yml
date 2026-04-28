@@ -1,0 +1,56 @@
+services:
+  - type: postgres
+    data:
+      serviceName: db
+      image: postgres:16
+      password: change-me-strong-password
+
+  - type: app
+    data:
+      serviceName: ata-saas
+      source:
+        type: github
+        owner: taalimohamedahmed-netizen
+        repo: ata-saas
+        ref: master
+        path: /backend
+        autoDeploy: true
+      build:
+        type: dockerfile
+      env: |
+        APP_ENV=production
+        APP_HOST=0.0.0.0
+        APP_PORT=8000
+        APP_BASE_URL=https://api.saas.ataproject.cloud
+        LOG_LEVEL=INFO
+        DATABASE_URL=postgresql+asyncpg://postgres:change-me-strong-password@$(PROJECT_NAME)_db:5432/postgres
+        REDIS_URL=
+        JWT_SECRET=change-me-to-a-long-random-string
+        JWT_ALGORITHM=HS256
+        JWT_EXPIRE_MINUTES=1440
+        ANTHROPIC_API_KEY=sk-ant-your-real-key-here
+        ANTHROPIC_MODEL=claude-sonnet-4-6
+        CORS_ORIGINS=https://saas.ataproject.cloud
+      domains:
+        - host: api.saas.ataproject.cloud
+          port: 8000
+          https: true
+
+  - type: app
+    data:
+      serviceName: frontend
+      source:
+        type: github
+        owner: taalimohamedahmed-netizen
+        repo: ata-saas
+        ref: master
+        path: /frontend
+        autoDeploy: true
+      build:
+        type: dockerfile
+      env: |
+        NEXT_PUBLIC_API_URL=https://api.saas.ataproject.cloud
+      domains:
+        - host: saas.ataproject.cloud
+          port: 3000
+          https: true

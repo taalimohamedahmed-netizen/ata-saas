@@ -38,14 +38,25 @@ class Tenant(Base):
     )
 
     # ----- Shopify -----
-    shopify_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shopify_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     shopify_domain: Mapped[str | None] = mapped_column(String(180), nullable=True)
     shopify_webhook_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    shopify_webhook_orders_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shopify_webhook_products_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shopify_webhook_customers_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shopify_connected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ----- WhatsApp Business API -----
     whatsapp_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     whatsapp_phone_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_phone_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    whatsapp_waba_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     whatsapp_verify_token: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_connected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # ----- Brand -----
     brand_name: Mapped[str | None] = mapped_column(String(120), nullable=True)

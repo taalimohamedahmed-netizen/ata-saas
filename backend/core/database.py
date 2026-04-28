@@ -124,6 +124,10 @@ async def init_connections() -> None:
             "SQLite" if _is_sqlite else "PostgreSQL",
         )
 
+    # Add new columns that may be missing from existing tenants table.
+    if not _is_sqlite:
+        await _run_column_migrations()
+
     # Smoke-test Redis (optional).
     try:
         import redis.asyncio as redis_async  # noqa: F811
@@ -137,6 +141,27 @@ async def init_connections() -> None:
     except Exception as exc:
         _redis_available = False
         log.warning("Redis not available (%s) — running without cache.", exc)
+
+
+async def _run_column_migrations() -> None:
+    """Add new columns to existing tables using ADD COLUMN IF NOT EXISTS."""
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_orders_id VARCHAR(50)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_products_id VARCHAR(50)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_customers_id VARCHAR(50)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_connected_at TIMESTAMPTZ",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_phone_number VARCHAR(30)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_waba_id VARCHAR(50)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_connected_at TIMESTAMPTZ",
+    ]
+    async with engine.begin() as conn:
+        for sql in migrations:
+            try:
+                await conn.execute(text(sql))
+            except Exception as exc:
+                log.warning("Column migration skipped: %s — %s", sql, exc)
+    log.info("Column migrations applied")
 
 
 async def close_connections() -> None:

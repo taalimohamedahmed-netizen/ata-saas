@@ -301,7 +301,10 @@ async def shopify_sync(
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
+    log.info("Starting Shopify sync for tenant_id=%s", tenant.id)
+    
     if not tenant.shopify_domain or not tenant.shopify_token:
+        log.warning("Shopify not connected for tenant_id=%s", tenant.id)
         raise HTTPException(status_code=400, detail="Shopify غير متصل")
 
     class _Proxy:
@@ -310,14 +313,24 @@ async def shopify_sync(
 
     try:
         svc = ShopifyService(_Proxy())
+        log.info("ShopifyService initialized for domain=%s", tenant.shopify_domain)
     except Exception as exc:
+        log.exception("ShopifyService initialization failed: %s", exc)
         raise HTTPException(status_code=400, detail=f"تعذر الاتصال بـ Shopify: {exc}")
 
     # ── Fetch from Shopify ──────────────────────────────────
     try:
+        log.info("Fetching products...")
         shopify_products = await svc.sync_products(max_products=500)
+        log.info("Fetched %s products", len(shopify_products))
+        
+        log.info("Fetching orders...")
         shopify_orders = await svc.sync_orders(max_orders=500)
+        log.info("Fetched %s orders", len(shopify_orders))
+        
+        log.info("Fetching customers...")
         shopify_customers = await svc.sync_customers(max_customers=500)
+        log.info("Fetched %s customers", len(shopify_customers))
     except Exception as exc:
         log.exception("Shopify sync fetch failed: %s", exc)
         raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
@@ -328,6 +341,7 @@ async def shopify_sync(
 
     # ── Sync Products ───────────────────────────────────────
     from models.product import Product
+    log.info("Upserting products...")
     for p in shopify_products:
         sid = str(p.get("id", ""))
         if not sid: continue
@@ -357,8 +371,10 @@ async def shopify_sync(
         products_synced += 1
 
     await db.flush()
+    log.info("Products upserted: %s", products_synced)
 
     # ── Sync Customers ──────────────────────────────────────
+    log.info("Upserting customers...")
     for c in shopify_customers:
         sid = str(c.get("id", ""))
         if not sid: continue
@@ -384,8 +400,10 @@ async def shopify_sync(
         customers_synced += 1
 
     await db.flush()
+    log.info("Customers upserted: %s", customers_synced)
 
     # ── Sync Orders ─────────────────────────────────────────
+    log.info("Upserting orders...")
     for o in shopify_orders:
         sid = str(o.get("id", ""))
         if not sid: continue
@@ -411,8 +429,7 @@ async def shopify_sync(
         orders_synced += 1
 
     await db.commit()
-    log.info("Shopify sync tenant=%s products=%s customers=%s orders=%s", 
-             tenant.id, products_synced, customers_synced, orders_synced)
+    log.info("Orders upserted: %s. Sync finished successfully.", orders_synced)
     
     return {
         "synced": {

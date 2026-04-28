@@ -111,20 +111,17 @@ async def init_connections() -> None:
     global _redis_available
 
     # Import models here so SQLAlchemy registers them on Base.metadata.
-    from models import conversation, customer, order, tenant  # noqa: F401
+    from models import conversation, customer, order, tenant, product  # noqa: F401
 
-    # Auto-create tables in dev, or when CREATE_TABLES=true is set explicitly.
-    should_create = os.getenv("APP_ENV", "development") == "development" or \
-                    os.getenv("CREATE_TABLES", "false").lower() == "true"
-    if should_create:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        log.info(
-            "Auto-created tables via Base.metadata.create_all (%s)",
-            "SQLite" if _is_sqlite else "PostgreSQL",
-        )
+    # Ensure all tables exist (safe to call multiple times)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    log.info(
+        "Tables verified/created via Base.metadata.create_all (%s)",
+        "SQLite" if _is_sqlite else "PostgreSQL",
+    )
 
-    # Add new columns that may be missing from existing tenants table.
+    # Add new columns/constraints that may be missing from existing tables.
     if not _is_sqlite:
         await _run_column_migrations()
 
@@ -147,6 +144,7 @@ async def _run_column_migrations() -> None:
     """Add new columns to existing tables using ADD COLUMN IF NOT EXISTS."""
     from sqlalchemy import text
     migrations = [
+        # Tenants updates
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_orders_id VARCHAR(50)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_products_id VARCHAR(50)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_webhook_customers_id VARCHAR(50)",
@@ -156,17 +154,44 @@ async def _run_column_migrations() -> None:
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_connected_at TIMESTAMPTZ",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_client_id VARCHAR(100)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_client_secret TEXT",
+        
+        # Customers updates
         "ALTER TABLE customers ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(60)",
         "ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(180)",
         "ALTER TABLE customers ALTER COLUMN phone DROP NOT NULL",
+        
+        # Products table (if Base.metadata.create_all skipped it or needs manual tuning)
+        """
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+            shopify_product_id VARCHAR(60) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            body_html TEXT,
+            vendor VARCHAR(120),
+            product_type VARCHAR(120),
+            status VARCHAR(40),
+            price FLOAT NOT NULL DEFAULT 0.0,
+            inventory_qty INTEGER NOT NULL DEFAULT 0,
+            image_url VARCHAR(500),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT uq_product_tenant_shopify_id UNIQUE (tenant_id, shopify_product_id)
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_products_tenant_id ON products(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_products_shopify_product_id ON products(shopify_product_id)",
     ]
     async with engine.begin() as conn:
         for sql in migrations:
             try:
-                await conn.execute(text(sql))
+                # Remove extra whitespace/newlines from multi-line SQL
+                cleaned_sql = " ".join(sql.split())
+                if not cleaned_sql: continue
+                await conn.execute(text(cleaned_sql))
             except Exception as exc:
-                log.warning("Column migration skipped: %s — %s", sql, exc)
-    log.info("Column migrations applied")
+                log.warning("Migration step skipped: %s — %s", sql.strip()[:50], exc)
+    log.info("Database migrations/sync applied")
 
 
 async def close_connections() -> None:

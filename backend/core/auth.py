@@ -52,6 +52,7 @@ PUBLIC_PREFIXES: tuple[str, ...] = (
     "/auth/register",
     "/auth/login",
     "/webhook/",  # tenant_id is in URL; signature checked in route
+    "/integrations/shopify/oauth/callback",  # Shopify redirects here — no JWT
 )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

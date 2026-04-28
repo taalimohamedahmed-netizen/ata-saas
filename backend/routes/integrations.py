@@ -1,29 +1,35 @@
 """
-Integration management routes — Shopify + WhatsApp setup for merchants.
+Integration management routes — Shopify OAuth + WhatsApp setup.
 
-All routes require JWT auth. Every operation is scoped to the
-authenticated tenant; credentials from other tenants are never exposed.
+Shopify uses the standard OAuth flow:
+  1. POST /integrations/shopify/oauth/start  → redirect URL to Shopify consent
+  2. GET  /integrations/shopify/oauth/callback → exchange code, save token, register webhooks
+  3. GET  /integrations/shopify/status        → connection + webhook status
+  4. POST /integrations/shopify/webhooks/retry → retry failed registrations
 
-Endpoints:
-  POST /integrations/shopify/connect          → save creds + register webhooks
-  GET  /integrations/shopify/status           → connection + webhook status
-  POST /integrations/shopify/webhooks/retry   → retry failed webhook registration
-
-  POST /integrations/whatsapp/connect         → save creds + generate verify_token
-  GET  /integrations/whatsapp/status          → connection status
-  POST /integrations/whatsapp/verify          → send test message
+WhatsApp:
+  POST /integrations/whatsapp/connect  → save creds + generate verify_token
+  GET  /integrations/whatsapp/status   → status
+  POST /integrations/whatsapp/verify   → test message
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
+from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_tenant
@@ -37,18 +43,13 @@ log = logging.getLogger("ata.routes.integrations")
 router = APIRouter()
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://saas.ataproject.cloud")
+JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
 
-
-# ============================================================
-# Helpers
-# ============================================================
-def _shopify_webhook_address(tenant_id: int, topic_slug: str) -> str:
-    return f"{APP_BASE_URL}/webhook/shopify/{tenant_id}/{topic_slug}"
-
-
-def _whatsapp_webhook_url(tenant_id: int) -> str:
-    return f"{APP_BASE_URL}/webhook/whatsapp/{tenant_id}"
-
+SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
+SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
+SHOPIFY_SCOPES = "read_orders,write_orders,read_products,read_customers"
+SHOPIFY_CALLBACK_URL = f"{APP_BASE_URL}/integrations/shopify/oauth/callback"
 
 SHOPIFY_WEBHOOK_TOPICS = [
     ("orders/create",    "orders"),
@@ -58,94 +59,193 @@ SHOPIFY_WEBHOOK_TOPICS = [
 
 
 # ============================================================
-# Schemas
+# Helpers
 # ============================================================
-class ShopifyConnectIn(BaseModel):
-    shopify_domain: str = Field(min_length=4, max_length=180)
-    shopify_token: str = Field(min_length=4, max_length=500)
+
+def _webhook_address(tenant_id: int, slug: str) -> str:
+    return f"{APP_BASE_URL}/webhook/shopify/{tenant_id}/{slug}"
 
 
-class WhatsAppConnectIn(BaseModel):
-    waba_id: str = Field(min_length=4, max_length=50)
-    phone_number_id: str = Field(min_length=4, max_length=50)
-    phone_number: str = Field(min_length=6, max_length=30)
-    access_token: str = Field(min_length=10)
+def _whatsapp_webhook_url(tenant_id: int) -> str:
+    return f"{APP_BASE_URL}/webhook/whatsapp/{tenant_id}"
+
+
+def _make_state(tenant_id: int, shop: str) -> str:
+    payload = {
+        "tenant_id": tenant_id,
+        "shop": shop,
+        "nonce": secrets.token_hex(8),
+        "exp": int((datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def _decode_state(state: str) -> dict:
+    try:
+        return jwt.decode(state, JWT_SECRET, algorithms=["HS256"])
+    except JWTError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid OAuth state: {exc}")
+
+
+def _verify_shopify_hmac(params: dict) -> bool:
+    """Verify Shopify's HMAC on the OAuth callback query params."""
+    hmac_value = params.pop("hmac", "")
+    sorted_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
+    digest = hmac.new(
+        SHOPIFY_CLIENT_SECRET.encode(), sorted_params.encode(), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(digest, hmac_value)
+
+
+async def _register_all_webhooks(svc: ShopifyService, tenant: Tenant) -> dict[str, Any]:
+    results: dict[str, Any] = {}
+    for topic, slug in SHOPIFY_WEBHOOK_TOPICS:
+        address = _webhook_address(tenant.id, slug)
+        wh_id_attr = f"shopify_webhook_{slug}_id"
+        try:
+            existing = await svc.find_webhook(topic)
+            if existing:
+                wh_id = str(existing["id"])
+            else:
+                created = await svc.register_webhook(topic, address)
+                wh_id = str(created.get("id", ""))
+            setattr(tenant, wh_id_attr, wh_id)
+            results[topic] = {"status": "connected", "id": wh_id}
+        except Exception as exc:
+            log.warning("Webhook registration failed topic=%s: %s", topic, exc)
+            results[topic] = {"status": "failed", "error": str(exc)}
+    return results
 
 
 # ============================================================
-# SHOPIFY — Connect
+# SHOPIFY OAUTH — Start
 # ============================================================
-@router.post("/shopify/connect")
-async def shopify_connect(
-    payload: ShopifyConnectIn,
-    db: AsyncSession = Depends(get_db),
+
+class ShopifyOAuthStartIn(BaseModel):
+    shop_domain: str = Field(min_length=4, max_length=180)
+
+
+@router.post("/shopify/oauth/start")
+async def shopify_oauth_start(
+    payload: ShopifyOAuthStartIn,
     tenant: Tenant = Depends(get_current_tenant),
-) -> dict[str, Any]:
-    """Save Shopify credentials and auto-register the 3 required webhooks."""
-    domain = payload.shopify_domain.strip().lower().removesuffix("/")
-    if not domain.endswith(".myshopify.com"):
+) -> dict[str, str]:
+    """Return the Shopify OAuth authorization URL for this merchant to visit."""
+    if not SHOPIFY_CLIENT_ID:
         raise HTTPException(
-            status_code=422,
-            detail="يجب أن يكون النطاق بصيغة yourstore.myshopify.com",
+            status_code=503,
+            detail="SHOPIFY_CLIENT_ID غير مضبوط في الـ server. تواصل مع الدعم.",
         )
 
-    tenant.shopify_domain = domain
-    tenant.shopify_token = encrypt(payload.shopify_token)
+    shop = payload.shop_domain.strip().lower().removesuffix("/")
+    if not shop.endswith(".myshopify.com"):
+        raise HTTPException(status_code=422, detail="النطاق يجب أن يكون بصيغة yourstore.myshopify.com")
+
+    state = _make_state(tenant.id, shop)
+    params = {
+        "client_id": SHOPIFY_CLIENT_ID,
+        "scope": SHOPIFY_SCOPES,
+        "redirect_uri": SHOPIFY_CALLBACK_URL,
+        "state": state,
+        "grant_options[]": "per-user",
+    }
+    auth_url = f"https://{shop}/admin/oauth/authorize?{urlencode(params)}"
+    return {"redirect_url": auth_url}
+
+
+# ============================================================
+# SHOPIFY OAUTH — Callback (called by Shopify, no JWT)
+# ============================================================
+
+@router.get("/shopify/oauth/callback")
+async def shopify_oauth_callback(
+    request: Request,
+    code: str | None = Query(default=None),
+    state: str | None = Query(default=None),
+    shop: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Shopify redirects here after merchant approves the app.
+    Exchanges code for access token, saves it, registers webhooks,
+    then redirects merchant back to the frontend.
+    """
+    frontend_integrations = f"{FRONTEND_URL}/dashboard/settings/integrations"
+
+    if not code or not state or not shop:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=missing_params")
+
+    # Verify HMAC from Shopify
+    if SHOPIFY_CLIENT_SECRET:
+        all_params = dict(request.query_params)
+        if not _verify_shopify_hmac(all_params):
+            return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=invalid_hmac")
+
+    # Decode state JWT to get tenant_id
+    claims = _decode_state(state)
+    tenant_id = claims.get("tenant_id")
+    if not tenant_id:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=bad_state")
+
+    # Exchange code for access token
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                f"https://{shop}/admin/oauth/access_token",
+                json={
+                    "client_id": SHOPIFY_CLIENT_ID,
+                    "client_secret": SHOPIFY_CLIENT_SECRET,
+                    "code": code,
+                },
+            )
+            resp.raise_for_status()
+            access_token = resp.json().get("access_token")
+    except Exception as exc:
+        log.exception("Shopify token exchange failed: %s", exc)
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=token_exchange_failed")
+
+    if not access_token:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=no_token")
+
+    # Load tenant and save credentials
+    result = await db.execute(select(Tenant).where(Tenant.id == int(tenant_id)))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=tenant_not_found")
+
+    tenant.shopify_domain = shop
+    tenant.shopify_token = encrypt(access_token)
+    tenant.shopify_connected_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(tenant)
 
-    # Build a temporary tenant-like object with decrypted token for API calls
-    class _TenantProxy:
-        shopify_domain = tenant.shopify_domain
-        shopify_token = payload.shopify_token  # raw (not encrypted)
-
-    webhook_results: dict[str, Any] = {}
+    # Register the 3 webhooks
+    class _Proxy:
+        shopify_domain = shop
+        shopify_token = access_token
 
     try:
-        svc = ShopifyService(_TenantProxy())
-        for topic, slug in SHOPIFY_WEBHOOK_TOPICS:
-            address = _shopify_webhook_address(tenant.id, slug)
-            wh_id_attr = f"shopify_webhook_{slug}_id"
-            try:
-                existing = await svc.find_webhook(topic)
-                if existing:
-                    wh_id = str(existing["id"])
-                    webhook_results[topic] = {"status": "connected", "id": wh_id}
-                else:
-                    created = await svc.register_webhook(topic, address)
-                    wh_id = str(created.get("id", ""))
-                    webhook_results[topic] = {"status": "connected", "id": wh_id}
-                setattr(tenant, wh_id_attr, wh_id)
-            except Exception as exc:
-                log.warning("Webhook registration failed topic=%s: %s", topic, exc)
-                webhook_results[topic] = {"status": "failed", "error": str(exc)}
-
-        tenant.shopify_connected_at = datetime.now(timezone.utc)
+        svc = ShopifyService(_Proxy())
+        webhook_results = await _register_all_webhooks(svc, tenant)
         await db.commit()
+        log.info("Shopify OAuth complete tenant=%s webhooks=%s", tenant_id, webhook_results)
     except Exception as exc:
-        log.exception("Shopify connect failed tenant=%s", tenant.id)
-        raise HTTPException(status_code=400, detail=f"فشل الاتصال بـ Shopify: {exc}")
+        log.exception("Webhook registration after OAuth failed: %s", exc)
 
-    return {
-        "connected": True,
-        "domain": domain,
-        "webhooks": webhook_results,
-    }
+    return RedirectResponse(f"{frontend_integrations}?shopify=success&shop={shop}")
 
 
 # ============================================================
 # SHOPIFY — Status
 # ============================================================
+
 @router.get("/shopify/status")
-async def shopify_status(
-    tenant: Tenant = Depends(get_current_tenant),
-) -> dict[str, Any]:
+async def shopify_status(tenant: Tenant = Depends(get_current_tenant)) -> dict[str, Any]:
     connected = bool(tenant.shopify_domain and tenant.shopify_token)
     webhooks = {}
     for topic, slug in SHOPIFY_WEBHOOK_TOPICS:
         wh_id = getattr(tenant, f"shopify_webhook_{slug}_id", None)
         webhooks[topic] = {"status": "connected" if wh_id else "not_registered", "id": wh_id}
-
     return {
         "connected": connected,
         "domain": tenant.shopify_domain,
@@ -157,6 +257,7 @@ async def shopify_status(
 # ============================================================
 # SHOPIFY — Retry webhooks
 # ============================================================
+
 @router.post("/shopify/webhooks/retry")
 async def shopify_webhooks_retry(
     db: AsyncSession = Depends(get_db),
@@ -165,28 +266,12 @@ async def shopify_webhooks_retry(
     if not tenant.shopify_domain or not tenant.shopify_token:
         raise HTTPException(status_code=400, detail="Shopify غير متصل")
 
-    class _TenantProxy:
+    class _Proxy:
         shopify_domain = tenant.shopify_domain
         shopify_token = decrypt(tenant.shopify_token)
 
-    svc = ShopifyService(_TenantProxy())
-    results: dict[str, Any] = {}
-
-    for topic, slug in SHOPIFY_WEBHOOK_TOPICS:
-        wh_id_attr = f"shopify_webhook_{slug}_id"
-        address = _shopify_webhook_address(tenant.id, slug)
-        try:
-            existing = await svc.find_webhook(topic)
-            if existing:
-                wh_id = str(existing["id"])
-            else:
-                created = await svc.register_webhook(topic, address)
-                wh_id = str(created.get("id", ""))
-            setattr(tenant, wh_id_attr, wh_id)
-            results[topic] = {"status": "connected", "id": wh_id}
-        except Exception as exc:
-            results[topic] = {"status": "failed", "error": str(exc)}
-
+    svc = ShopifyService(_Proxy())
+    results = await _register_all_webhooks(svc, tenant)
     await db.commit()
     return {"webhooks": results}
 
@@ -194,25 +279,29 @@ async def shopify_webhooks_retry(
 # ============================================================
 # WHATSAPP — Connect
 # ============================================================
+
+class WhatsAppConnectIn(BaseModel):
+    waba_id: str = Field(min_length=4, max_length=50)
+    phone_number_id: str = Field(min_length=4, max_length=50)
+    phone_number: str = Field(min_length=6, max_length=30)
+    access_token: str = Field(min_length=10)
+
+
 @router.post("/whatsapp/connect")
 async def whatsapp_connect(
     payload: WhatsAppConnectIn,
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
-    """Save WhatsApp credentials and return webhook URL + verify token."""
     if not tenant.whatsapp_verify_token:
         tenant.whatsapp_verify_token = secrets.token_hex(24)
-
     tenant.whatsapp_waba_id = payload.waba_id
     tenant.whatsapp_phone_id = payload.phone_number_id
     tenant.whatsapp_phone_number = payload.phone_number
     tenant.whatsapp_token = encrypt(payload.access_token)
     tenant.whatsapp_connected_at = datetime.now(timezone.utc)
-
     await db.commit()
     await db.refresh(tenant)
-
     return {
         "connected": True,
         "phone_number": tenant.whatsapp_phone_number,
@@ -225,10 +314,9 @@ async def whatsapp_connect(
 # ============================================================
 # WHATSAPP — Status
 # ============================================================
+
 @router.get("/whatsapp/status")
-async def whatsapp_status(
-    tenant: Tenant = Depends(get_current_tenant),
-) -> dict[str, Any]:
+async def whatsapp_status(tenant: Tenant = Depends(get_current_tenant)) -> dict[str, Any]:
     connected = bool(tenant.whatsapp_token and tenant.whatsapp_phone_id)
     return {
         "connected": connected,
@@ -241,10 +329,11 @@ async def whatsapp_status(
 
 
 # ============================================================
-# WHATSAPP — Verify (send test message)
+# WHATSAPP — Verify (test message)
 # ============================================================
+
 class WhatsAppVerifyIn(BaseModel):
-    test_phone: str = Field(min_length=7, max_length=20, description="رقم الهاتف لإرسال رسالة اختبار إليه")
+    test_phone: str = Field(min_length=7, max_length=20)
 
 
 @router.post("/whatsapp/verify")
@@ -252,25 +341,17 @@ async def whatsapp_verify(
     payload: WhatsAppVerifyIn,
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
-    """Send a test WhatsApp message to verify the connection works."""
     if not tenant.whatsapp_token or not tenant.whatsapp_phone_id:
         raise HTTPException(status_code=400, detail="WhatsApp غير متصل بعد")
 
-    class _TenantProxy:
+    class _Proxy:
         whatsapp_token = decrypt(tenant.whatsapp_token)
         whatsapp_phone_id = tenant.whatsapp_phone_id
 
     try:
-        wa = WhatsAppService(_TenantProxy())
+        wa = WhatsAppService(_Proxy())
         phone = "".join(ch for ch in payload.test_phone if ch.isdigit())
-        await wa.send_text(
-            to=phone,
-            body="✅ ATA: تم التحقق من الاتصال بنجاح! منصتك جاهزة لاستقبال رسائل العملاء.",
-        )
+        await wa.send_text(to=phone, body="✅ ATA: تم التحقق من الاتصال بنجاح! منصتك جاهزة.")
         return {"verified": True, "message": "تم إرسال رسالة الاختبار بنجاح"}
     except Exception as exc:
-        log.warning("WhatsApp verify failed tenant=%s: %s", tenant.id, exc)
-        raise HTTPException(
-            status_code=400,
-            detail=f"فشل التحقق: {exc}",
-        )
+        raise HTTPException(status_code=400, detail=f"فشل التحقق: {exc}")

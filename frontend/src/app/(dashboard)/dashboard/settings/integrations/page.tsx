@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getShopifyStatus, connectShopify, retryShopifyWebhooks,
+  getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks,
   getWhatsAppStatus, connectWhatsApp, verifyWhatsApp,
   type ShopifyStatus, type WhatsAppStatus,
 } from "@/lib/integrations";
@@ -125,10 +126,9 @@ function TextInput({ value, onChange, placeholder, dir = "ltr" }: { value: strin
 
 // ─── Shopify Section ───────────────────────────────────────
 
-function ShopifySection() {
+function ShopifySection({ onOAuthResult }: { onOAuthResult?: (result: "success" | "error", reason?: string) => void }) {
   const [status, setStatus] = useState<ShopifyStatus | null>(null);
   const [domain, setDomain] = useState("");
-  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -138,18 +138,15 @@ function ShopifySection() {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!domain || !token) return;
+    if (!domain) return;
     setLoading(true);
     try {
-      const result = await connectShopify(domain, token);
-      toast.success("تم الاتصال بـ Shopify بنجاح!");
-      setStatus({ connected: result.connected, domain: result.domain, connected_at: null, webhooks: result.webhooks });
-      setDomain("");
-      setToken("");
+      const { redirect_url } = await startShopifyOAuth(domain.trim());
+      // Redirect the whole browser — Shopify will bring us back via OAuth callback
+      window.location.href = redirect_url;
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل الاتصال بـ Shopify";
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل بدء تسجيل الدخول عبر Shopify";
       toast.error(msg);
-    } finally {
       setLoading(false);
     }
   };
@@ -183,7 +180,7 @@ function ShopifySection() {
         <StatusBadge connected={!!status?.connected} />
       </div>
 
-      {/* Webhooks status */}
+      {/* Webhooks status (shown after OAuth connect) */}
       {status?.connected && status.webhooks && (
         <div className="rounded-xl border border-border bg-navy p-4 space-y-1">
           <div className="flex items-center justify-between mb-2">
@@ -203,8 +200,12 @@ function ShopifySection() {
         </div>
       )}
 
-      {/* Connect form */}
+      {/* OAuth connect form */}
       <form onSubmit={handleConnect} className="space-y-4">
+        <div className="rounded-xl border border-border bg-navy px-4 py-3 text-xs text-muted leading-relaxed" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+          <span className="font-semibold text-slate-300">كيف يعمل؟</span> أدخل نطاق متجرك ثم اضغط الزر — ستُحوَّل إلى Shopify لتفويض الوصول، وبعدها ستعود هنا تلقائيًا مع ربط المتجر وتسجيل الـ Webhooks.
+        </div>
+
         <div>
           <FieldLabel>نطاق المتجر (Shopify Domain)</FieldLabel>
           <TextInput value={domain} onChange={setDomain} placeholder="mystore.myshopify.com" />
@@ -213,27 +214,14 @@ function ShopifySection() {
 انسخ الجزء: mystore.myshopify.com`}</HelpBox>
         </div>
 
-        <div>
-          <FieldLabel>Admin API Access Token</FieldLabel>
-          <SecretInput value={token} onChange={setToken} placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxx" />
-          <HelpBox>{`في Shopify Admin:
-١. اذهب إلى Settings → Apps and sales channels
-٢. اضغط Develop apps → Allow custom app development
-٣. Create an app → أدخل اسم التطبيق
-٤. في Configure Admin API scopes اختر:
-   ✓ read_orders  ✓ write_orders
-   ✓ read_products  ✓ read_customers
-٥. اضغط Save → Install app
-٦. انسخ Admin API access token`}</HelpBox>
-        </div>
-
         <button
           type="submit"
-          disabled={loading || !domain || !token}
-          className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading || !domain}
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
         >
-          {loading ? "جاري الاتصال..." : status?.connected ? "تحديث الاتصال" : "ربط المتجر"}
+          <ExternalLink className="h-4 w-4" />
+          {loading ? "جاري التحويل إلى Shopify..." : status?.connected ? "إعادة ربط المتجر" : "ربط المتجر عبر Shopify"}
         </button>
       </form>
     </div>
@@ -421,6 +409,29 @@ function WhatsAppSection() {
 // ─── Page ──────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const shopify = searchParams.get("shopify");
+    const reason = searchParams.get("reason");
+    if (shopify === "success") {
+      toast.success("تم ربط متجر Shopify بنجاح! ✅");
+      // Clean the URL without reloading
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (shopify === "error") {
+      const msgs: Record<string, string> = {
+        missing_params: "بيانات ناقصة من Shopify",
+        invalid_hmac: "التوقيع غير صالح — تأكد من الـ Client Secret",
+        bad_state: "جلسة OAuth منتهية — حاول مجددًا",
+        token_exchange_failed: "فشل استبدال الكود بالتوكن",
+        no_token: "لم يُرسل Shopify توكنًا صالحًا",
+        tenant_not_found: "الحساب غير موجود",
+      };
+      toast.error(msgs[reason ?? ""] || "فشل ربط Shopify — حاول مجددًا");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [searchParams]);
+
   return (
     <div className="max-w-2xl space-y-6" dir="rtl">
       <div>

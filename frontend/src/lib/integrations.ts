@@ -15,25 +15,16 @@ export interface ShopifyStatus {
   webhooks: Record<string, WebhookStatus>;
 }
 
-export interface ShopifyConnectResult {
-  connected: boolean;
-  domain: string;
-  webhooks: Record<string, WebhookStatus>;
-}
 
 export const getShopifyStatus = async (): Promise<ShopifyStatus> => {
   const res = await api.get("/integrations/shopify/status");
   return res.data;
 };
 
-export const connectShopify = async (
-  shopify_domain: string,
-  shopify_token: string,
-): Promise<ShopifyConnectResult> => {
-  const res = await api.post("/integrations/shopify/connect", {
-    shopify_domain,
-    shopify_token,
-  });
+export const startShopifyOAuth = async (
+  shop_domain: string,
+): Promise<{ redirect_url: string }> => {
+  const res = await api.post("/integrations/shopify/oauth/start", { shop_domain });
   return res.data;
 };
 

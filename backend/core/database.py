@@ -154,6 +154,8 @@ async def _run_column_migrations() -> None:
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_phone_number VARCHAR(30)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_waba_id VARCHAR(50)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS whatsapp_connected_at TIMESTAMPTZ",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_client_id VARCHAR(100)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS shopify_client_secret TEXT",
     ]
     async with engine.begin() as conn:
         for sql in migrations:

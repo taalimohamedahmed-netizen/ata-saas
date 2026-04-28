@@ -47,6 +47,8 @@ class Tenant(Base):
     shopify_connected_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    shopify_client_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    shopify_client_secret: Mapped[str | None] = mapped_column(Text, nullable=True)  # encrypted
 
     # ----- WhatsApp Business API -----
     whatsapp_token: Mapped[str | None] = mapped_column(Text, nullable=True)

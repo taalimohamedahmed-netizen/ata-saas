@@ -46,8 +46,6 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://saas.ataproject.cloud")
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
 
-SHOPIFY_CLIENT_ID = os.getenv("SHOPIFY_CLIENT_ID", "")
-SHOPIFY_CLIENT_SECRET = os.getenv("SHOPIFY_CLIENT_SECRET", "")
 SHOPIFY_SCOPES = "read_orders,write_orders,read_products,read_customers"
 SHOPIFY_CALLBACK_URL = f"{APP_BASE_URL}/integrations/shopify/oauth/callback"
 
@@ -87,12 +85,12 @@ def _decode_state(state: str) -> dict:
         raise HTTPException(status_code=400, detail=f"Invalid OAuth state: {exc}")
 
 
-def _verify_shopify_hmac(params: dict) -> bool:
+def _verify_shopify_hmac(params: dict, secret: str) -> bool:
     """Verify Shopify's HMAC on the OAuth callback query params."""
     hmac_value = params.pop("hmac", "")
     sorted_params = "&".join(f"{k}={v}" for k, v in sorted(params.items()))
     digest = hmac.new(
-        SHOPIFY_CLIENT_SECRET.encode(), sorted_params.encode(), hashlib.sha256
+        secret.encode(), sorted_params.encode(), hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(digest, hmac_value)
 
@@ -123,27 +121,30 @@ async def _register_all_webhooks(svc: ShopifyService, tenant: Tenant) -> dict[st
 
 class ShopifyOAuthStartIn(BaseModel):
     shop_domain: str = Field(min_length=4, max_length=180)
+    client_id: str = Field(min_length=10, max_length=100)
+    client_secret: str = Field(min_length=10, max_length=100)
 
 
 @router.post("/shopify/oauth/start")
 async def shopify_oauth_start(
     payload: ShopifyOAuthStartIn,
+    db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, str]:
-    """Return the Shopify OAuth authorization URL for this merchant to visit."""
-    if not SHOPIFY_CLIENT_ID:
-        raise HTTPException(
-            status_code=503,
-            detail="SHOPIFY_CLIENT_ID غير مضبوط في الـ server. تواصل مع الدعم.",
-        )
-
+    """Save the merchant's Shopify app credentials then return the OAuth authorization URL."""
     shop = payload.shop_domain.strip().lower().removesuffix("/")
     if not shop.endswith(".myshopify.com"):
         raise HTTPException(status_code=422, detail="النطاق يجب أن يكون بصيغة yourstore.myshopify.com")
 
+    # Persist per-tenant credentials before redirecting
+    tenant.shopify_client_id = payload.client_id.strip()
+    tenant.shopify_client_secret = encrypt(payload.client_secret.strip())
+    await db.commit()
+    await db.refresh(tenant)
+
     state = _make_state(tenant.id, shop)
     params = {
-        "client_id": SHOPIFY_CLIENT_ID,
+        "client_id": payload.client_id.strip(),
         "scope": SHOPIFY_SCOPES,
         "redirect_uri": SHOPIFY_CALLBACK_URL,
         "state": state,
@@ -175,28 +176,35 @@ async def shopify_oauth_callback(
     if not code or not state or not shop:
         return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=missing_params")
 
-    # Verify HMAC from Shopify
-    if SHOPIFY_CLIENT_SECRET:
-        all_params = dict(request.query_params)
-        if not _verify_shopify_hmac(all_params):
-            return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=invalid_hmac")
-
-    # Decode state JWT to get tenant_id
+    # Decode state JWT first to identify the tenant
     claims = _decode_state(state)
     tenant_id = claims.get("tenant_id")
     if not tenant_id:
         return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=bad_state")
 
-    # Exchange code for access token
+    # Load tenant — we need their credentials for HMAC + code exchange
+    result = await db.execute(select(Tenant).where(Tenant.id == int(tenant_id)))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=tenant_not_found")
+
+    client_secret = decrypt(tenant.shopify_client_secret) if tenant.shopify_client_secret else ""
+    client_id = tenant.shopify_client_id or ""
+
+    if not client_id or not client_secret:
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=missing_credentials")
+
+    # Verify HMAC using the tenant's own client secret
+    all_params = dict(request.query_params)
+    if not _verify_shopify_hmac(all_params, client_secret):
+        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=invalid_hmac")
+
+    # Exchange code for access token using tenant's credentials
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
                 f"https://{shop}/admin/oauth/access_token",
-                json={
-                    "client_id": SHOPIFY_CLIENT_ID,
-                    "client_secret": SHOPIFY_CLIENT_SECRET,
-                    "code": code,
-                },
+                json={"client_id": client_id, "client_secret": client_secret, "code": code},
             )
             resp.raise_for_status()
             access_token = resp.json().get("access_token")
@@ -206,12 +214,6 @@ async def shopify_oauth_callback(
 
     if not access_token:
         return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=no_token")
-
-    # Load tenant and save credentials
-    result = await db.execute(select(Tenant).where(Tenant.id == int(tenant_id)))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        return RedirectResponse(f"{frontend_integrations}?shopify=error&reason=tenant_not_found")
 
     tenant.shopify_domain = shop
     tenant.shopify_token = encrypt(access_token)

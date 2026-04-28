@@ -126,9 +126,11 @@ function TextInput({ value, onChange, placeholder, dir = "ltr" }: { value: strin
 
 // ─── Shopify Section ───────────────────────────────────────
 
-function ShopifySection({ onOAuthResult }: { onOAuthResult?: (result: "success" | "error", reason?: string) => void }) {
+function ShopifySection() {
   const [status, setStatus] = useState<ShopifyStatus | null>(null);
   const [domain, setDomain] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -138,11 +140,14 @@ function ShopifySection({ onOAuthResult }: { onOAuthResult?: (result: "success" 
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!domain) return;
+    if (!domain || !clientId || !clientSecret) return;
     setLoading(true);
     try {
-      const { redirect_url } = await startShopifyOAuth(domain.trim());
-      // Redirect the whole browser — Shopify will bring us back via OAuth callback
+      const { redirect_url } = await startShopifyOAuth({
+        shop_domain: domain.trim(),
+        client_id: clientId.trim(),
+        client_secret: clientSecret.trim(),
+      });
       window.location.href = redirect_url;
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل بدء تسجيل الدخول عبر Shopify";
@@ -203,20 +208,37 @@ function ShopifySection({ onOAuthResult }: { onOAuthResult?: (result: "success" 
       {/* OAuth connect form */}
       <form onSubmit={handleConnect} className="space-y-4">
         <div className="rounded-xl border border-border bg-navy px-4 py-3 text-xs text-muted leading-relaxed" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-          <span className="font-semibold text-slate-300">كيف يعمل؟</span> أدخل نطاق متجرك ثم اضغط الزر — ستُحوَّل إلى Shopify لتفويض الوصول، وبعدها ستعود هنا تلقائيًا مع ربط المتجر وتسجيل الـ Webhooks.
+          <span className="font-semibold text-slate-300">كيف يعمل؟</span> أنشئ Custom App في Shopify Partners، أدخل بياناتها أدناه، ثم اضغط الزر — ستُحوَّل لتفويض الوصول وتعود هنا تلقائيًا.
         </div>
 
         <div>
           <FieldLabel>نطاق المتجر (Shopify Domain)</FieldLabel>
           <TextInput value={domain} onChange={setDomain} placeholder="mystore.myshopify.com" />
-          <HelpBox>{`افتح متجرك على Shopify → Admin → الرابط في المتصفح
+          <HelpBox>{`الرابط في متصفحك عند فتح Shopify Admin
 مثال: https://mystore.myshopify.com/admin
 انسخ الجزء: mystore.myshopify.com`}</HelpBox>
         </div>
 
+        <div>
+          <FieldLabel>Client ID</FieldLabel>
+          <TextInput value={clientId} onChange={setClientId} placeholder="abc123def456..." />
+          <HelpBox>{`في Shopify Partners (partners.shopify.com):
+١. Apps → Create app → Custom app
+٢. في App setup انسخ الـ Client ID`}</HelpBox>
+        </div>
+
+        <div>
+          <FieldLabel>Client Secret</FieldLabel>
+          <SecretInput value={clientSecret} onChange={setClientSecret} placeholder="shpss_xxxxxxxxxxxxxxxxxxxxxxxx" />
+          <HelpBox>{`في نفس صفحة App setup في Shopify Partners
+انسخ الـ Client secret
+تأكد أن Redirect URL يحتوي على:
+${typeof window !== "undefined" ? window.location.origin.replace("saas.", "api.") : "https://api.ataproject.cloud"}/integrations/shopify/oauth/callback`}</HelpBox>
+        </div>
+
         <button
           type="submit"
-          disabled={loading || !domain}
+          disabled={loading || !domain || !clientId || !clientSecret}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
         >

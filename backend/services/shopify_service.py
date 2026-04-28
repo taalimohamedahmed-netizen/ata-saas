@@ -10,6 +10,7 @@ Auth: Shopify access token is a tenant column (tenant.shopify_token).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -51,8 +52,9 @@ class ShopifyService:
         path: str,
         params: dict | None = None,
         json_body: dict | None = None,
+        _retry: int = 3,
     ) -> dict[str, Any]:
-        """Wrapper around httpx with shared headers + error logging."""
+        """Wrapper around httpx with shared headers, error logging, and 429 retry."""
         url = f"{self.base_url}{path}"
         async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
             resp = await client.request(
@@ -62,6 +64,13 @@ class ShopifyService:
                 params=params,
                 json=json_body,
             )
+
+        if resp.status_code == 429 and _retry > 0:
+            wait = float(resp.headers.get("Retry-After", "2"))
+            log.warning("Shopify rate limit hit — waiting %.1fs then retrying", wait)
+            await asyncio.sleep(wait)
+            return await self._request(method, path, params, json_body, _retry=_retry - 1)
+
         if resp.status_code >= 400:
             log.error(
                 "Shopify %s %s → %s: %s",
@@ -136,12 +145,13 @@ class ShopifyService:
     # Historical sync helpers
     # ----------------------------------------------------------------
     async def sync_orders(self, max_orders: int = 500) -> list[dict[str, Any]]:
-        """Fetch orders for historical sync using since_id pagination."""
-        per_page = min(250, max_orders)
+        """Fetch orders for historical sync using since_id pagination with rate-limit delay."""
+        per_page = 50  # small batches to stay within rate limit
         params: dict[str, Any] = {"status": "any", "limit": per_page, "order": "created_at asc"}
         data = await self._request("GET", "/orders.json", params=params)
         orders: list[dict[str, Any]] = data.get("orders", [])
         while len(orders) < max_orders and orders and len(orders) % per_page == 0:
+            await asyncio.sleep(0.6)  # ~1.6 req/s — safely under the 2/s bucket
             params["since_id"] = orders[-1]["id"]
             data = await self._request("GET", "/orders.json", params=params)
             batch = data.get("orders", [])
@@ -151,12 +161,13 @@ class ShopifyService:
         return orders[:max_orders]
 
     async def sync_customers(self, max_customers: int = 500) -> list[dict[str, Any]]:
-        """Fetch customers for historical sync using since_id pagination."""
-        per_page = min(250, max_customers)
+        """Fetch customers for historical sync using since_id pagination with rate-limit delay."""
+        per_page = 50
         params: dict[str, Any] = {"limit": per_page}
         data = await self._request("GET", "/customers.json", params=params)
         customers: list[dict[str, Any]] = data.get("customers", [])
         while len(customers) < max_customers and customers and len(customers) % per_page == 0:
+            await asyncio.sleep(0.6)
             params["since_id"] = customers[-1]["id"]
             data = await self._request("GET", "/customers.json", params=params)
             batch = data.get("customers", [])

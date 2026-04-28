@@ -308,11 +308,18 @@ async def shopify_sync(
         shopify_domain = tenant.shopify_domain
         shopify_token = decrypt(tenant.shopify_token)
 
-    svc = ShopifyService(_Proxy())
+    try:
+        svc = ShopifyService(_Proxy())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"تعذر الاتصال بـ Shopify: {exc}")
 
     # ── Fetch from Shopify ──────────────────────────────────
-    shopify_orders = await svc.sync_orders(max_orders=500)
-    shopify_customers = await svc.sync_customers(max_customers=500)
+    try:
+        shopify_orders = await svc.sync_orders(max_orders=500)
+        shopify_customers = await svc.sync_customers(max_customers=500)
+    except Exception as exc:
+        log.exception("Shopify sync fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
 
     customers_created = 0
     orders_created = 0

@@ -222,9 +222,10 @@ function ShopifySection() {
     try {
       const result = await syncShopify();
       const { orders, customers } = result.synced;
-      toast.success(`تم سحب ${orders} طلب و ${customers} عميل من Shopify`);
-    } catch {
-      toast.error("فشل سحب البيانات — تأكد من الاتصال");
+      toast.success(`تم سحب ${orders} طلب و ${customers} عميل من Shopify ✅`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل سحب البيانات — تأكد من الاتصال";
+      toast.error(msg);
     } finally {
       setSyncing(false);
     }

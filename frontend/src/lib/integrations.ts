@@ -13,6 +13,7 @@ export interface ShopifyStatus {
   domain: string | null;
   connected_at: string | null;
   webhooks: Record<string, WebhookStatus>;
+  webhook_urls: Record<string, string>;
 }
 
 
@@ -32,6 +33,11 @@ export const startShopifyOAuth = async (data: {
 
 export const retryShopifyWebhooks = async (): Promise<{ webhooks: Record<string, WebhookStatus> }> => {
   const res = await api.post("/integrations/shopify/webhooks/retry");
+  return res.data;
+};
+
+export const syncShopify = async (): Promise<{ synced: { orders: number; customers: number } }> => {
+  const res = await api.post("/integrations/shopify/sync");
   return res.data;
 };
 

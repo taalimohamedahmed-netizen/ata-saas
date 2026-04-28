@@ -133,6 +133,39 @@ class ShopifyService:
         )
 
     # ----------------------------------------------------------------
+    # Historical sync helpers
+    # ----------------------------------------------------------------
+    async def sync_orders(self, max_orders: int = 500) -> list[dict[str, Any]]:
+        """Fetch orders for historical sync using since_id pagination."""
+        per_page = min(250, max_orders)
+        params: dict[str, Any] = {"status": "any", "limit": per_page, "order": "created_at asc"}
+        data = await self._request("GET", "/orders.json", params=params)
+        orders: list[dict[str, Any]] = data.get("orders", [])
+        while len(orders) < max_orders and orders and len(orders) % per_page == 0:
+            params["since_id"] = orders[-1]["id"]
+            data = await self._request("GET", "/orders.json", params=params)
+            batch = data.get("orders", [])
+            if not batch:
+                break
+            orders.extend(batch)
+        return orders[:max_orders]
+
+    async def sync_customers(self, max_customers: int = 500) -> list[dict[str, Any]]:
+        """Fetch customers for historical sync using since_id pagination."""
+        per_page = min(250, max_customers)
+        params: dict[str, Any] = {"limit": per_page}
+        data = await self._request("GET", "/customers.json", params=params)
+        customers: list[dict[str, Any]] = data.get("customers", [])
+        while len(customers) < max_customers and customers and len(customers) % per_page == 0:
+            params["since_id"] = customers[-1]["id"]
+            data = await self._request("GET", "/customers.json", params=params)
+            batch = data.get("customers", [])
+            if not batch:
+                break
+            customers.extend(batch)
+        return customers[:max_customers]
+
+    # ----------------------------------------------------------------
     # Products (used by RevenueHandler for upsells)
     # ----------------------------------------------------------------
     async def list_products(self, limit: int = 10) -> list[dict[str, Any]]:

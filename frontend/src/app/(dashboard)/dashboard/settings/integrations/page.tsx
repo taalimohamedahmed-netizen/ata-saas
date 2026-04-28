@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks,
+  getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks, syncShopify,
   getWhatsAppStatus, connectWhatsApp, verifyWhatsApp,
   type ShopifyStatus, type WhatsAppStatus,
 } from "@/lib/integrations";
@@ -133,6 +133,7 @@ function ShopifySection() {
   const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     getShopifyStatus().then(setStatus).catch(() => {});
@@ -216,6 +217,19 @@ function ShopifySection() {
     }
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncShopify();
+      const { orders, customers } = result.synced;
+      toast.success(`تم سحب ${orders} طلب و ${customers} عميل من Shopify`);
+    } catch {
+      toast.error("فشل سحب البيانات — تأكد من الاتصال");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-6 space-y-5">
       {/* Header */}
@@ -246,6 +260,37 @@ function ShopifySection() {
             <WebhookRow key={topic} topic={topic} status={wh.status} id={wh.id} />
           ))}
         </div>
+      )}
+
+      {/* Webhook URLs (for manual setup in Shopify Notifications) */}
+      {status?.connected && status.webhook_urls && Object.keys(status.webhook_urls).length > 0 && (
+        <div className="rounded-xl border border-border bg-navy p-4 space-y-3">
+          <p className="text-xs font-medium text-muted uppercase tracking-wide" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+            روابط الـ Webhooks — للإضافة اليدوية في Shopify
+          </p>
+          {Object.entries(status.webhook_urls).map(([slug, url]) => (
+            <div key={slug}>
+              <p className="text-xs text-muted mb-1 font-mono">{slug}</p>
+              <div className="flex items-center rounded-lg border border-border bg-navy-light px-3 py-2">
+                <span className="flex-1 text-xs font-mono text-white break-all" dir="ltr">{url}</span>
+                <CopyButton value={url} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sync historical data */}
+      {status?.connected && (
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-navy py-2.5 text-sm font-semibold text-white hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
+        >
+          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          {syncing ? "جاري سحب البيانات..." : "سحب بيانات Shopify (طلبات + عملاء)"}
+        </button>
       )}
 
       {/* Connect form */}

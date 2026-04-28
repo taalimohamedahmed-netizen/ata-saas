@@ -36,6 +36,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.auth import get_current_tenant
 from core.database import get_db
 from core.encryption import decrypt, encrypt
+from models.customer import Customer
+from models.order import Order, OrderStatus
 from models.tenant import Tenant
 from services.shopify_service import ShopifyService
 from services.whatsapp_service import WhatsAppService
@@ -243,11 +245,16 @@ async def shopify_status(tenant: Tenant = Depends(get_current_tenant)) -> dict[s
     for topic, slug in SHOPIFY_WEBHOOK_TOPICS:
         wh_id = getattr(tenant, f"shopify_webhook_{slug}_id", None)
         webhooks[topic] = {"status": "connected" if wh_id else "not_registered", "id": wh_id}
+    webhook_urls = (
+        {slug: _webhook_address(tenant.id, slug) for _, slug in SHOPIFY_WEBHOOK_TOPICS}
+        if connected else {}
+    )
     return {
         "connected": connected,
         "domain": tenant.shopify_domain,
         "connected_at": tenant.shopify_connected_at.isoformat() if tenant.shopify_connected_at else None,
         "webhooks": webhooks,
+        "webhook_urls": webhook_urls,
     }
 
 
@@ -271,6 +278,97 @@ async def shopify_webhooks_retry(
     results = await _register_all_webhooks(svc, tenant)
     await db.commit()
     return {"webhooks": results}
+
+
+# ============================================================
+# SHOPIFY — Historical sync
+# ============================================================
+
+def _extract_phone_from_order(payload: dict) -> str | None:
+    for src in [
+        (payload.get("customer") or {}).get("phone"),
+        (payload.get("shipping_address") or {}).get("phone"),
+        (payload.get("billing_address") or {}).get("phone"),
+        payload.get("phone"),
+    ]:
+        if src and isinstance(src, str) and src.strip():
+            return "".join(ch for ch in src if ch.isdigit()) or None
+    return None
+
+
+@router.post("/shopify/sync")
+async def shopify_sync(
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    if not tenant.shopify_domain or not tenant.shopify_token:
+        raise HTTPException(status_code=400, detail="Shopify غير متصل")
+
+    class _Proxy:
+        shopify_domain = tenant.shopify_domain
+        shopify_token = decrypt(tenant.shopify_token)
+
+    svc = ShopifyService(_Proxy())
+
+    # ── Fetch from Shopify ──────────────────────────────────
+    shopify_orders = await svc.sync_orders(max_orders=500)
+    shopify_customers = await svc.sync_customers(max_customers=500)
+
+    customers_created = 0
+    orders_created = 0
+
+    # ── Upsert customers ────────────────────────────────────
+    for c in shopify_customers:
+        phone_raw = (c.get("phone") or "").strip()
+        phone = "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None
+        if not phone:
+            continue
+        result = await db.execute(
+            select(Customer).where(Customer.tenant_id == tenant.id, Customer.phone == phone)
+        )
+        if result.scalar_one_or_none():
+            continue
+        full_name = " ".join(
+            p for p in [c.get("first_name"), c.get("last_name")] if p
+        ).strip() or None
+        db.add(Customer(tenant_id=tenant.id, phone=phone, name=full_name))
+        customers_created += 1
+
+    await db.flush()
+
+    # ── Upsert orders ───────────────────────────────────────
+    for o in shopify_orders:
+        shopify_order_id = str(o.get("id") or "")
+        if not shopify_order_id:
+            continue
+        existing = await db.execute(
+            select(Order).where(Order.tenant_id == tenant.id, Order.shopify_order_id == shopify_order_id)
+        )
+        if existing.scalar_one_or_none():
+            continue
+
+        phone = _extract_phone_from_order(o)
+        customer: Customer | None = None
+        if phone:
+            result = await db.execute(
+                select(Customer).where(Customer.tenant_id == tenant.id, Customer.phone == phone)
+            )
+            customer = result.scalar_one_or_none()
+
+        db.add(Order(
+            tenant_id=tenant.id,
+            customer_id=customer.id if customer else None,
+            shopify_order_id=shopify_order_id,
+            shopify_order_number=o.get("name") or str(o.get("order_number") or "") or None,
+            status=OrderStatus.PENDING,
+            total_price=float(o.get("total_price") or 0),
+            currency=o.get("currency") or "EGP",
+        ))
+        orders_created += 1
+
+    await db.commit()
+    log.info("Shopify sync tenant=%s orders=%s customers=%s", tenant.id, orders_created, customers_created)
+    return {"synced": {"orders": orders_created, "customers": customers_created}}
 
 
 # ============================================================

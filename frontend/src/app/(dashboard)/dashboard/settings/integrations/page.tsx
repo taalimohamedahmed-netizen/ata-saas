@@ -129,6 +129,8 @@ function TextInput({ value, onChange, placeholder, dir = "ltr" }: { value: strin
 function ShopifySection() {
   const [status, setStatus] = useState<ShopifyStatus | null>(null);
   const [domain, setDomain] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -138,13 +140,17 @@ function ShopifySection() {
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!domain) return;
+    if (!domain || !clientId || !clientSecret) return;
     setLoading(true);
     try {
-      const { redirect_url } = await startShopifyOAuth(domain.trim());
+      const { redirect_url } = await startShopifyOAuth({
+        shop_domain: domain.trim(),
+        client_id: clientId.trim(),
+        client_secret: clientSecret.trim(),
+      });
       window.location.href = redirect_url;
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل الاتصال — تأكد من النطاق";
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل الاتصال — تأكد من البيانات";
       toast.error(msg);
       setLoading(false);
     }
@@ -197,6 +203,10 @@ function ShopifySection() {
 
       {/* Connect form */}
       <form onSubmit={handleConnect} className="space-y-4">
+        <div className="rounded-xl border border-border bg-navy px-4 py-3 text-xs text-muted" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
+          <span className="font-semibold text-slate-300">ادخل بيانات تطبيق Shopify Partner الخاص بك:</span> نطاق المتجر + Client ID + Client Secret
+        </div>
+
         <div>
           <FieldLabel>نطاق المتجر (Shopify Domain)</FieldLabel>
           <TextInput value={domain} onChange={setDomain} placeholder="mystore.myshopify.com" />
@@ -205,9 +215,25 @@ function ShopifySection() {
 انسخ الجزء: mystore.myshopify.com`}</HelpBox>
         </div>
 
+        <div>
+          <FieldLabel>Client ID</FieldLabel>
+          <TextInput value={clientId} onChange={setClientId} placeholder="d25b3250c99c5da4..." />
+          <HelpBox>{`في Shopify Partners → Apps → اختر تطبيقك
+→ App setup → Client credentials
+انسخ الـ Client ID`}</HelpBox>
+        </div>
+
+        <div>
+          <FieldLabel>Client Secret</FieldLabel>
+          <SecretInput value={clientSecret} onChange={setClientSecret} placeholder="shpss_xxxxxxxxxxxxxxxx..." />
+          <HelpBox>{`في Shopify Partners → Apps → اختر تطبيقك
+→ App setup → Client credentials
+انسخ الـ Client Secret`}</HelpBox>
+        </div>
+
         <button
           type="submit"
-          disabled={loading || !domain}
+          disabled={loading || !domain || !clientId || !clientSecret}
           className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
         >
@@ -412,11 +438,12 @@ export default function IntegrationsPage() {
     } else {
       const msgs: Record<string, string> = {
         missing_params: "بيانات ناقصة — حاول مجدداً",
-        invalid_hmac: "توقيع غير صالح من Shopify",
+        invalid_hmac: "توقيع غير صالح من Shopify — تأكد من الـ Client Secret",
         bad_state: "انتهت صلاحية الجلسة — حاول مجدداً",
-        token_exchange_failed: "فشل الاتصال بـ Shopify",
+        token_exchange_failed: "فشل الاتصال بـ Shopify — تأكد من البيانات",
         no_token: "لم يصلنا توكن من Shopify",
         tenant_not_found: "الحساب غير موجود",
+        missing_credentials: "الـ Client ID أو Client Secret مفقود — حاول مجدداً",
       };
       toast.error(msgs[reason ?? ""] || "فشل ربط Shopify — حاول مجدداً");
     }

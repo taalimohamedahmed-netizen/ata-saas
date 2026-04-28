@@ -113,12 +113,14 @@ async def init_connections() -> None:
     # Import models here so SQLAlchemy registers them on Base.metadata.
     from models import conversation, customer, order, tenant  # noqa: F401
 
-    # Auto-create tables in dev. Production should use Alembic migrations.
-    if os.getenv("APP_ENV", "development") == "development":
+    # Auto-create tables in dev, or when CREATE_TABLES=true is set explicitly.
+    should_create = os.getenv("APP_ENV", "development") == "development" or \
+                    os.getenv("CREATE_TABLES", "false").lower() == "true"
+    if should_create:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         log.info(
-            "Dev mode: auto-created tables via Base.metadata.create_all (%s)",
+            "Auto-created tables via Base.metadata.create_all (%s)",
             "SQLite" if _is_sqlite else "PostgreSQL",
         )
 

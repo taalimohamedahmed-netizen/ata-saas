@@ -221,10 +221,12 @@ function ShopifySection() {
 ٢. Develop apps → Allow custom app development
 ٣. Create an app → أدخل اسم التطبيق
 ٤. Configuration → Admin API scopes → اختر:
-   ✓ read_orders   ✓ write_orders
-   ✓ read_products ✓ read_customers
+   ✓ read_orders      ✓ write_orders
+   ✓ read_products    ✓ write_products
+   ✓ read_customers   ✓ write_customers
 ٥. Save → Install app
-٦. انسخ Admin API access token (يظهر مرة واحدة فقط!)`}</HelpBox>
+٦. API credentials → انسخ Admin API access token
+   (يظهر مرة واحدة فقط — احفظه فوراً!)`}</HelpBox>
         </div>
 
         <button

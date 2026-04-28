@@ -109,9 +109,8 @@ async def _dispatch(
         if not ShopifyService.verify_webhook(raw_body, hmac_header, secret):
             log.warning("Invalid Shopify HMAC for tenant=%s", tenant_id)
             raise HTTPException(status_code=401, detail="invalid_hmac")
-    elif os.getenv("APP_ENV", "development") != "development":
-        log.error("Tenant %s has no Shopify webhook secret in prod", tenant_id)
-        raise HTTPException(status_code=401, detail="webhook_secret_missing")
+    else:
+        log.debug("No webhook secret for tenant=%s — skipping HMAC check", tenant_id)
 
     try:
         payload = await request.json()

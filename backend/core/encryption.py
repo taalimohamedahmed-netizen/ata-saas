@@ -37,9 +37,13 @@ def _get_fernet():
             _warned = True
         return None
 
-    from cryptography.fernet import Fernet
-    _fernet = Fernet(key.encode())
-    return _fernet
+    try:
+        from cryptography.fernet import Fernet
+        _fernet = Fernet(key.encode())
+        return _fernet
+    except Exception as exc:
+        log.error("FERNET_KEY غير صالح (%s) — التوكنات ستُخزَّن بدون تشفير!", exc)
+        return None
 
 
 def encrypt(value: str | None) -> str | None:

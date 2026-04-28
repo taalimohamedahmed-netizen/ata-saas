@@ -21,12 +21,11 @@ export const getShopifyStatus = async (): Promise<ShopifyStatus> => {
   return res.data;
 };
 
-export const startShopifyOAuth = async (data: {
+export const connectShopify = async (data: {
   shop_domain: string;
-  client_id: string;
-  client_secret: string;
-}): Promise<{ redirect_url: string }> => {
-  const res = await api.post("/integrations/shopify/oauth/start", data);
+  access_token: string;
+}): Promise<{ connected: boolean; domain: string; webhooks: Record<string, WebhookStatus> }> => {
+  const res = await api.post("/integrations/shopify/connect", data);
   return res.data;
 };
 

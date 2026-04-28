@@ -221,11 +221,16 @@ function ShopifySection() {
     setSyncing(true);
     try {
       const result = await syncShopify();
-      const { orders, customers } = result.synced;
-      toast.success(`تم سحب ${orders} طلب و ${customers} عميل من Shopify ✅`);
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل سحب البيانات — تأكد من الاتصال";
-      toast.error(msg);
+      const { orders, customers, products } = result.synced as any;
+      toast.success(`تم سحب ${orders} طلب، ${customers} عميل، و ${products || 0} منتج ✅`);
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      const backendDetail = err.response?.data?.detail;
+      const backendError = err.response?.data?.error;
+      const statusText = err.response?.statusText;
+      
+      const msg = backendDetail || backendError || statusText || err.message || "فشل سحب البيانات — تأكد من الاتصال";
+      toast.error(`خطأ: ${msg}`);
     } finally {
       setSyncing(false);
     }

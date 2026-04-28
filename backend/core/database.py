@@ -111,15 +111,21 @@ async def init_connections() -> None:
     global _redis_available
 
     # Import models here so SQLAlchemy registers them on Base.metadata.
-    from models import conversation, customer, order, tenant, product  # noqa: F401
+    try:
+        from models import conversation, customer, order, tenant, product  # noqa: F401
+    except ImportError as exc:
+        log.error("Failed to import models: %s", exc)
 
     # Ensure all tables exist (safe to call multiple times)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    log.info(
-        "Tables verified/created via Base.metadata.create_all (%s)",
-        "SQLite" if _is_sqlite else "PostgreSQL",
-    )
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        log.info(
+            "Tables verified/created via Base.metadata.create_all (%s)",
+            "SQLite" if _is_sqlite else "PostgreSQL",
+        )
+    except Exception as exc:
+        log.error("Base.metadata.create_all failed: %s", exc)
 
     # Add new columns/constraints that may be missing from existing tables.
     if not _is_sqlite:
@@ -158,9 +164,21 @@ async def _run_column_migrations() -> None:
         # Customers updates
         "ALTER TABLE customers ADD COLUMN IF NOT EXISTS shopify_customer_id VARCHAR(60)",
         "ALTER TABLE customers ADD COLUMN IF NOT EXISTS email VARCHAR(180)",
+        # Note: ALTER COLUMN DROP NOT NULL is Postgres specific
         "ALTER TABLE customers ALTER COLUMN phone DROP NOT NULL",
         
-        # Products table (if Base.metadata.create_all skipped it or needs manual tuning)
+        # Unique constraint for customers (shopify_customer_id)
+        # We wrap this in a DO block to make it idempotent in Postgres
+        """
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_customer_tenant_shopify_id') THEN
+                ALTER TABLE customers ADD CONSTRAINT uq_customer_tenant_shopify_id UNIQUE (tenant_id, shopify_customer_id);
+            END IF;
+        END $$;
+        """,
+        
+        # Products table fallback (if create_all failed)
         """
         CREATE TABLE IF NOT EXISTS products (
             id SERIAL PRIMARY KEY,
@@ -190,7 +208,7 @@ async def _run_column_migrations() -> None:
                 if not cleaned_sql: continue
                 await conn.execute(text(cleaned_sql))
             except Exception as exc:
-                log.warning("Migration step skipped: %s — %s", sql.strip()[:50], exc)
+                log.warning("Migration step skipped: %s — %s", sql.strip()[:30], exc)
     log.info("Database migrations/sync applied")
 
 

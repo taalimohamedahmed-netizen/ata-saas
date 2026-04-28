@@ -145,13 +145,12 @@ class ShopifyService:
     # Historical sync helpers
     # ----------------------------------------------------------------
     async def sync_orders(self, max_orders: int = 500) -> list[dict[str, Any]]:
-        """Fetch orders for historical sync using since_id pagination with rate-limit delay."""
-        per_page = 50  # small batches to stay within rate limit
+        """Fetch orders for historical sync using since_id pagination."""
+        per_page = 250
         params: dict[str, Any] = {"status": "any", "limit": per_page, "order": "created_at asc"}
         data = await self._request("GET", "/orders.json", params=params)
         orders: list[dict[str, Any]] = data.get("orders", [])
         while len(orders) < max_orders and orders and len(orders) % per_page == 0:
-            await asyncio.sleep(0.6)  # ~1.6 req/s — safely under the 2/s bucket
             params["since_id"] = orders[-1]["id"]
             data = await self._request("GET", "/orders.json", params=params)
             batch = data.get("orders", [])
@@ -160,21 +159,20 @@ class ShopifyService:
             orders.extend(batch)
         return orders[:max_orders]
 
-    async def sync_customers(self, max_customers: int = 500) -> list[dict[str, Any]]:
-        """Fetch customers for historical sync using since_id pagination with rate-limit delay."""
-        per_page = 50
+    async def sync_products(self, max_products: int = 500) -> list[dict[str, Any]]:
+        """Fetch products for historical sync using since_id pagination."""
+        per_page = 250
         params: dict[str, Any] = {"limit": per_page}
-        data = await self._request("GET", "/customers.json", params=params)
-        customers: list[dict[str, Any]] = data.get("customers", [])
-        while len(customers) < max_customers and customers and len(customers) % per_page == 0:
-            await asyncio.sleep(0.6)
-            params["since_id"] = customers[-1]["id"]
-            data = await self._request("GET", "/customers.json", params=params)
-            batch = data.get("customers", [])
+        data = await self._request("GET", "/products.json", params=params)
+        products: list[dict[str, Any]] = data.get("products", [])
+        while len(products) < max_products and products and len(products) % per_page == 0:
+            params["since_id"] = products[-1]["id"]
+            data = await self._request("GET", "/products.json", params=params)
+            batch = data.get("products", [])
             if not batch:
                 break
-            customers.extend(batch)
-        return customers[:max_customers]
+            products.extend(batch)
+        return products[:max_products]
 
     # ----------------------------------------------------------------
     # Products (used by RevenueHandler for upsells)

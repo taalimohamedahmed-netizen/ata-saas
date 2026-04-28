@@ -81,6 +81,9 @@ class Tenant(Base):
     customers: Mapped[list["Customer"]] = relationship(  # noqa: F821
         back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
     )
+    products: Mapped[list["Product"]] = relationship(  # noqa: F821
+        back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
+    )
     orders: Mapped[list["Order"]] = relationship(  # noqa: F821
         back_populates="tenant", cascade="all, delete-orphan", lazy="selectin"
     )

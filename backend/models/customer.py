@@ -29,9 +29,9 @@ class CustomerSegment(str, enum.Enum):
 
 class Customer(Base):
     __tablename__ = "customers"
-    # Same phone can exist in two tenants — uniqueness is per-tenant.
+    # Same phone/email can exist in two tenants — uniqueness is per-tenant.
     __table_args__ = (
-        UniqueConstraint("tenant_id", "phone", name="uq_customer_tenant_phone"),
+        UniqueConstraint("tenant_id", "shopify_customer_id", name="uq_customer_tenant_shopify_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -41,7 +41,9 @@ class Customer(Base):
         index=True,
     )
 
-    phone: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    shopify_customer_id: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(180), nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     segment: Mapped[CustomerSegment] = mapped_column(

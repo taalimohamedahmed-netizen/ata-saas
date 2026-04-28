@@ -315,67 +315,112 @@ async def shopify_sync(
 
     # ── Fetch from Shopify ──────────────────────────────────
     try:
+        shopify_products = await svc.sync_products(max_products=500)
         shopify_orders = await svc.sync_orders(max_orders=500)
         shopify_customers = await svc.sync_customers(max_customers=500)
     except Exception as exc:
         log.exception("Shopify sync fetch failed: %s", exc)
         raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
 
-    customers_created = 0
-    orders_created = 0
+    products_synced = 0
+    customers_synced = 0
+    orders_synced = 0
 
-    # ── Upsert customers ────────────────────────────────────
-    for c in shopify_customers:
-        phone_raw = (c.get("phone") or "").strip()
-        phone = "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None
-        if not phone:
-            continue
-        result = await db.execute(
-            select(Customer).where(Customer.tenant_id == tenant.id, Customer.phone == phone)
-        )
-        if result.scalar_one_or_none():
-            continue
-        full_name = " ".join(
-            p for p in [c.get("first_name"), c.get("last_name")] if p
-        ).strip() or None
-        db.add(Customer(tenant_id=tenant.id, phone=phone, name=full_name))
-        customers_created += 1
+    # ── Sync Products ───────────────────────────────────────
+    from models.product import Product
+    for p in shopify_products:
+        sid = str(p.get("id", ""))
+        if not sid: continue
+        
+        # Check existing
+        res = await db.execute(select(Product).where(Product.tenant_id == tenant.id, Product.shopify_product_id == sid))
+        product = res.scalar_one_or_none()
+        
+        # Variants logic for price/inventory
+        variants = p.get("variants", [])
+        price = float(variants[0].get("price", 0)) if variants else 0.0
+        inventory = sum(v.get("inventory_quantity") or 0 for v in variants)
+        image_url = (p.get("images") or [{}])[0].get("src")
+        
+        if not product:
+            product = Product(tenant_id=tenant.id, shopify_product_id=sid)
+            db.add(product)
+            
+        product.title = p.get("title") or "Unknown"
+        product.body_html = p.get("body_html")
+        product.vendor = p.get("vendor")
+        product.product_type = p.get("product_type")
+        product.status = p.get("status")
+        product.price = price
+        product.inventory_qty = inventory
+        product.image_url = image_url
+        products_synced += 1
 
     await db.flush()
 
-    # ── Upsert orders ───────────────────────────────────────
+    # ── Sync Customers ──────────────────────────────────────
+    for c in shopify_customers:
+        sid = str(c.get("id", ""))
+        if not sid: continue
+        
+        # Match by Shopify ID
+        res = await db.execute(select(Customer).where(Customer.tenant_id == tenant.id, Customer.shopify_customer_id == sid))
+        customer = res.scalar_one_or_none()
+        
+        phone_raw = (c.get("phone") or "").strip()
+        phone = "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None
+        email = (c.get("email") or "").strip().lower() or None
+        full_name = " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or None
+
+        if not customer:
+            customer = Customer(tenant_id=tenant.id, shopify_customer_id=sid)
+            db.add(customer)
+            
+        customer.phone = phone
+        customer.email = email
+        customer.name = full_name
+        customer.total_orders = int(c.get("orders_count") or 0)
+        customer.total_spent = float(c.get("total_spent") or 0)
+        customers_synced += 1
+
+    await db.flush()
+
+    # ── Sync Orders ─────────────────────────────────────────
     for o in shopify_orders:
-        shopify_order_id = str(o.get("id") or "")
-        if not shopify_order_id:
-            continue
-        existing = await db.execute(
-            select(Order).where(Order.tenant_id == tenant.id, Order.shopify_order_id == shopify_order_id)
-        )
-        if existing.scalar_one_or_none():
-            continue
+        sid = str(o.get("id", ""))
+        if not sid: continue
+        
+        res = await db.execute(select(Order).where(Order.tenant_id == tenant.id, Order.shopify_order_id == sid))
+        order = res.scalar_one_or_none()
+        
+        # Try to link customer
+        customer_sid = str((o.get("customer") or {}).get("id", ""))
+        customer = None
+        if customer_sid:
+            res = await db.execute(select(Customer).where(Customer.tenant_id == tenant.id, Customer.shopify_customer_id == customer_sid))
+            customer = res.scalar_one_or_none()
 
-        phone = _extract_phone_from_order(o)
-        customer: Customer | None = None
-        if phone:
-            result = await db.execute(
-                select(Customer).where(Customer.tenant_id == tenant.id, Customer.phone == phone)
-            )
-            customer = result.scalar_one_or_none()
-
-        db.add(Order(
-            tenant_id=tenant.id,
-            customer_id=customer.id if customer else None,
-            shopify_order_id=shopify_order_id,
-            shopify_order_number=o.get("name") or str(o.get("order_number") or "") or None,
-            status=OrderStatus.PENDING,
-            total_price=float(o.get("total_price") or 0),
-            currency=o.get("currency") or "EGP",
-        ))
-        orders_created += 1
+        if not order:
+            order = Order(tenant_id=tenant.id, shopify_order_id=sid)
+            db.add(order)
+            
+        order.shopify_order_number = o.get("name") or str(o.get("order_number") or "") or None
+        order.customer_id = customer.id if customer else None
+        order.total_price = float(o.get("total_price") or 0)
+        order.currency = o.get("currency") or "EGP"
+        orders_synced += 1
 
     await db.commit()
-    log.info("Shopify sync tenant=%s orders=%s customers=%s", tenant.id, orders_created, customers_created)
-    return {"synced": {"orders": orders_created, "customers": customers_created}}
+    log.info("Shopify sync tenant=%s products=%s customers=%s orders=%s", 
+             tenant.id, products_synced, customers_synced, orders_synced)
+    
+    return {
+        "synced": {
+            "products": products_synced,
+            "customers": customers_synced,
+            "orders": orders_synced
+        }
+    }
 
 
 # ============================================================

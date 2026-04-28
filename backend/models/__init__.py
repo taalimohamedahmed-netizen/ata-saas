@@ -4,6 +4,7 @@ from models.conversation import Conversation
 from models.customer import Customer, CustomerSegment
 from models.order import Order, OrderStatus, PaymentMethod
 from models.tenant import Tenant, TenantPlan
+from models.product import Product
 
 __all__ = [
     "Conversation",
@@ -14,4 +15,5 @@ __all__ = [
     "PaymentMethod",
     "Tenant",
     "TenantPlan",
+    "Product",
 ]

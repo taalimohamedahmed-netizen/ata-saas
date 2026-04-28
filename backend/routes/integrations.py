@@ -148,7 +148,6 @@ async def shopify_oauth_start(
         "scope": SHOPIFY_SCOPES,
         "redirect_uri": SHOPIFY_CALLBACK_URL,
         "state": state,
-        "grant_options[]": "per-user",
     }
     auth_url = f"https://{shop}/admin/oauth/authorize?{urlencode(params)}"
     return {"redirect_url": auth_url}

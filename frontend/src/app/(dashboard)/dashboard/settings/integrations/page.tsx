@@ -138,6 +138,31 @@ function ShopifySection() {
     getShopifyStatus().then(setStatus).catch(() => {});
   }, []);
 
+  // Receive result from popup
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== "shopify_oauth") return;
+      setLoading(false);
+      if (e.data.result === "success") {
+        toast.success("تم ربط متجر Shopify بنجاح! ✅");
+        getShopifyStatus().then(setStatus).catch(() => {});
+      } else {
+        const msgs: Record<string, string> = {
+          missing_params: "بيانات ناقصة — حاول مجدداً",
+          invalid_hmac: "توقيع غير صالح — تأكد من الـ Client Secret",
+          bad_state: "انتهت صلاحية الجلسة — حاول مجدداً",
+          token_exchange_failed: "فشل الاتصال بـ Shopify — تأكد من البيانات",
+          no_token: "لم يصلنا توكن من Shopify",
+          missing_credentials: "الـ Client ID أو Secret مفقود",
+          tenant_not_found: "الحساب غير موجود",
+        };
+        toast.error(msgs[e.data.reason] || "فشل ربط Shopify — حاول مجدداً");
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!domain || !clientId || !clientSecret) return;
@@ -148,7 +173,29 @@ function ShopifySection() {
         client_id: clientId.trim(),
         client_secret: clientSecret.trim(),
       });
-      window.location.href = redirect_url;
+
+      const w = 600, h = 700;
+      const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+      const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+      const popup = window.open(
+        redirect_url,
+        "shopify_oauth",
+        `width=${w},height=${h},left=${left},top=${top},scrollbars=yes`
+      );
+
+      if (!popup) {
+        // Popup blocked — fall back to full redirect
+        window.location.href = redirect_url;
+        return;
+      }
+
+      // Fallback: popup closed by user without completing OAuth
+      const timer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(timer);
+          setLoading(false);
+        }
+      }, 500);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "فشل الاتصال — تأكد من البيانات";
       toast.error(msg);
@@ -433,6 +480,15 @@ export default function IntegrationsPage() {
     const reason = searchParams.get("reason");
     if (!shopify) return;
     window.history.replaceState({}, "", window.location.pathname);
+
+    // Popup mode: notify parent window and close
+    if (window.opener) {
+      window.opener.postMessage({ type: "shopify_oauth", result: shopify, reason }, "*");
+      window.close();
+      return;
+    }
+
+    // Direct redirect fallback: show toast in the main window
     if (shopify === "success") {
       toast.success("تم ربط متجر Shopify بنجاح! ✅");
     } else {

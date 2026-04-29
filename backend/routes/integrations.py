@@ -398,12 +398,16 @@ async def _run_shopify_sync_background(tenant_id: int, shopify_domain: str, encr
                         else:
                             db.add(Product(**item))
                 else:
-                    stmt = pg_upsert(Product).values(products_to_upsert)
-                    stmt = stmt.on_conflict_do_update(
-                        constraint="uq_product_tenant_shopify_id",
-                        set_={k: getattr(stmt.excluded, k) for k in products_to_upsert[0] if k not in ("tenant_id", "shopify_product_id")},
-                    )
-                    await db.execute(stmt)
+                    # Chunk to stay under asyncpg's 32767-parameter limit (12 cols × 500 = 6000)
+                    update_cols = {k for k in products_to_upsert[0] if k not in ("tenant_id", "shopify_product_id")}
+                    for i in range(0, len(products_to_upsert), 500):
+                        chunk = products_to_upsert[i : i + 500]
+                        stmt = pg_upsert(Product).values(chunk)
+                        stmt = stmt.on_conflict_do_update(
+                            constraint="uq_product_tenant_shopify_id",
+                            set_={k: getattr(stmt.excluded, k) for k in update_cols},
+                        )
+                        await db.execute(stmt)
 
             # ── Customers ───────────────────────────────────────────
             customers_to_upsert: list[dict[str, Any]] = []
@@ -439,12 +443,16 @@ async def _run_shopify_sync_background(tenant_id: int, shopify_domain: str, encr
                         else:
                             db.add(Customer(**item))
                 else:
-                    stmt = pg_upsert(Customer).values(customers_to_upsert)
-                    stmt = stmt.on_conflict_do_update(
-                        constraint="uq_customer_tenant_shopify_id",
-                        set_={k: getattr(stmt.excluded, k) for k in customers_to_upsert[0] if k not in ("tenant_id", "shopify_customer_id")},
-                    )
-                    await db.execute(stmt)
+                    # Chunk to stay under asyncpg's 32767-parameter limit (8 cols × 500 = 4000)
+                    update_cols = {k for k in customers_to_upsert[0] if k not in ("tenant_id", "shopify_customer_id")}
+                    for i in range(0, len(customers_to_upsert), 500):
+                        chunk = customers_to_upsert[i : i + 500]
+                        stmt = pg_upsert(Customer).values(chunk)
+                        stmt = stmt.on_conflict_do_update(
+                            constraint="uq_customer_tenant_shopify_id",
+                            set_={k: getattr(stmt.excluded, k) for k in update_cols},
+                        )
+                        await db.execute(stmt)
 
             await db.flush()
 

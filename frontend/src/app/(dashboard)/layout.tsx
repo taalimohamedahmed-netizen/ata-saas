@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -30,15 +30,22 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, tenantName, logout } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Client-side auth guard
-    if (!isAuthenticated) {
+    // Only redirect if we have hydrated (mounted) and are still not authenticated
+    if (mounted && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, mounted]);
 
-  if (!isAuthenticated) {
+  // Prevent flash of login or empty state during hydration
+  if (!mounted || !isAuthenticated) {
     return (
       <div className="flex h-screen items-center justify-center bg-navy">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />

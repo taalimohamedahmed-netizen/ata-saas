@@ -222,8 +222,12 @@ function ShopifySection() {
     setSyncing(true);
     try {
       const result = await syncShopify();
-      const { orders, customers, products } = result.synced as any;
-      toast.success(`تم سحب ${orders} طلب، ${customers} عميل، و ${products || 0} منتج ✅`);
+      if (result.status === "queued") {
+        toast.success(result.message || "جاري سحب البيانات في الخلفية ✅");
+      } else if (result.synced) {
+        const { orders, customers, products } = result.synced as any;
+        toast.success(`تم سحب ${orders} طلب، ${customers} عميل، و ${products || 0} منتج ✅`);
+      }
     } catch (err: any) {
       console.error("Sync error:", err);
       const backendDetail = err.response?.data?.detail;

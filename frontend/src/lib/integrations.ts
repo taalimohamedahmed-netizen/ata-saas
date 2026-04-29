@@ -36,7 +36,7 @@ export const retryShopifyWebhooks = async (): Promise<{ webhooks: Record<string,
   return res.data;
 };
 
-export const syncShopify = async (): Promise<{ synced: { orders: number; customers: number; products?: number } }> => {
+export const syncShopify = async (): Promise<{ status?: string; message?: string; synced?: { orders: number; customers: number; products?: number } }> => {
   const res = await api.post("/integrations/shopify/sync");
   return res.data;
 };

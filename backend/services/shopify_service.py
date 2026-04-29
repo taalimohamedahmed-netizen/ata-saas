@@ -142,52 +142,68 @@ class ShopifyService:
         )
 
     # ----------------------------------------------------------------
-    # Historical sync helpers
+    # Historical sync helpers (Cursor-based Pagination)
     # ----------------------------------------------------------------
-    async def sync_orders(self, max_orders: int = 500) -> list[dict[str, Any]]:
-        """Fetch orders for historical sync using since_id pagination."""
-        per_page = 250
-        params: dict[str, Any] = {"status": "any", "limit": per_page, "order": "created_at asc"}
-        data = await self._request("GET", "/orders.json", params=params)
-        orders: list[dict[str, Any]] = data.get("orders", [])
-        while len(orders) < max_orders and orders and len(orders) % per_page == 0:
-            params["since_id"] = orders[-1]["id"]
-            data = await self._request("GET", "/orders.json", params=params)
-            batch = data.get("orders", [])
-            if not batch:
-                break
-            orders.extend(batch)
-        return orders[:max_orders]
+    async def _paginate(self, path: str, resource_key: str, base_params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """Fetch all pages of a resource using Link header pagination."""
+        all_items = []
+        url = f"{self.base_url}{path}"
+        params = {"limit": 250}
+        if base_params:
+            params.update(base_params)
+            
+        while url:
+            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+                resp = await client.request(
+                    method="GET",
+                    url=url,
+                    headers=self.headers,
+                    params=params,
+                )
+            
+            if resp.status_code == 429:
+                wait = float(resp.headers.get("Retry-After", "2"))
+                log.warning("Shopify rate limit hit — waiting %.1fs then retrying", wait)
+                await asyncio.sleep(wait)
+                continue
+                
+            if resp.status_code >= 400:
+                log.error("Shopify GET %s → %s: %s", url, resp.status_code, resp.text[:300])
+                resp.raise_for_status()
+                
+            data = resp.json() if resp.content else {}
+            items = data.get(resource_key, [])
+            all_items.extend(items)
+            
+            # Parse Link header to find the 'next' page
+            link_header = resp.headers.get("Link", "")
+            next_url = None
+            if link_header:
+                links = link_header.split(",")
+                for link in links:
+                    if 'rel="next"' in link:
+                        start = link.find("<")
+                        end = link.find(">")
+                        if start != -1 and end != -1:
+                            next_url = link[start + 1 : end]
+                        break
+            
+            url = next_url
+            params = None  # query params are already included in the next_url
+            
+        return all_items
 
-    async def sync_products(self, max_products: int = 500) -> list[dict[str, Any]]:
-        """Fetch products for historical sync using since_id pagination."""
-        per_page = 250
-        params: dict[str, Any] = {"limit": per_page}
-        data = await self._request("GET", "/products.json", params=params)
-        products: list[dict[str, Any]] = data.get("products", [])
-        while len(products) < max_products and products and len(products) % per_page == 0:
-            params["since_id"] = products[-1]["id"]
-            data = await self._request("GET", "/products.json", params=params)
-            batch = data.get("products", [])
-            if not batch:
-                break
-            products.extend(batch)
-        return products[:max_products]
+    async def sync_orders(self) -> list[dict[str, Any]]:
+        """Fetch ALL orders for historical sync using cursor pagination."""
+        return await self._paginate("/orders.json", "orders", base_params={"status": "any", "order": "created_at asc"})
 
-    async def sync_customers(self, max_customers: int = 500) -> list[dict[str, Any]]:
-        """Fetch customers for historical sync using since_id pagination."""
-        per_page = 250
-        params: dict[str, Any] = {"limit": per_page}
-        data = await self._request("GET", "/customers.json", params=params)
-        customers: list[dict[str, Any]] = data.get("customers", [])
-        while len(customers) < max_customers and customers and len(customers) % per_page == 0:
-            params["since_id"] = customers[-1]["id"]
-            data = await self._request("GET", "/customers.json", params=params)
-            batch = data.get("customers", [])
-            if not batch:
-                break
-            customers.extend(batch)
-        return customers[:max_customers]
+    async def sync_products(self) -> list[dict[str, Any]]:
+        """Fetch ALL products for historical sync using cursor pagination."""
+        return await self._paginate("/products.json", "products")
+
+    async def sync_customers(self) -> list[dict[str, Any]]:
+        """Fetch ALL customers for historical sync using cursor pagination."""
+        return await self._paginate("/customers.json", "customers")
 
     # ----------------------------------------------------------------
     # Products (used by RevenueHandler for upsells)

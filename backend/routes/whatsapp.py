@@ -164,6 +164,9 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
         log.exception("AI Processing failed — using default error reply")
 
     # 4. Send reply
+    if not reply or not reply.strip():
+        reply = "عذراً، حدث خطأ ما. يرجى المحاولة لاحقاً."
+
     send_ok = False
     try:
         wa = WhatsAppService(tenant)

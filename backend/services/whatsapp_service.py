@@ -59,11 +59,12 @@ class WhatsAppService:
                 self.base, headers=self.headers, json=payload
             )
         if resp.status_code >= 400:
+            body_snippet = resp.text[:500]
             log.error(
                 "WhatsApp send failed (%s): %s",
-                resp.status_code, resp.text[:400],
+                resp.status_code, body_snippet,
             )
-            resp.raise_for_status()
+            raise Exception(f"WhatsApp API {resp.status_code}: {body_snippet}")
         return resp.json()
 
     # ----------------------------------------------------------------

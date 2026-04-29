@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_tenant
@@ -39,6 +39,7 @@ from core.encryption import decrypt, encrypt
 from models.customer import Customer
 from models.order import Order, OrderStatus
 from models.tenant import Tenant
+from models.product import Product # Moved to top
 from services.shopify_service import ShopifyService
 from services.whatsapp_service import WhatsAppService
 
@@ -301,11 +302,36 @@ async def shopify_sync(
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
-    log.info("Starting Shopify sync for tenant_id=%s", tenant.id)
+    log.info("Starting Shopify sync for tenant_id=%s domain=%s", tenant.id, tenant.shopify_domain)
     
     if not tenant.shopify_domain or not tenant.shopify_token:
         log.warning("Shopify not connected for tenant_id=%s", tenant.id)
         raise HTTPException(status_code=400, detail="Shopify غير متصل")
+
+    # Defensive check: ensure products table exists (helps if migrations skipped it)
+    try:
+        await db.execute(text("SELECT 1 FROM products LIMIT 1"))
+    except Exception:
+        log.warning("Products table seems missing, attempting emergency creation")
+        await db.execute(text("""
+            CREATE TABLE IF NOT EXISTS products (
+                id SERIAL PRIMARY KEY,
+                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                shopify_product_id VARCHAR(60) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                body_html TEXT,
+                vendor VARCHAR(120),
+                product_type VARCHAR(120),
+                status VARCHAR(40),
+                price FLOAT NOT NULL DEFAULT 0.0,
+                inventory_qty INTEGER NOT NULL DEFAULT 0,
+                image_url VARCHAR(500),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                CONSTRAINT uq_product_tenant_shopify_id UNIQUE (tenant_id, shopify_product_id)
+            )
+        """))
+        await db.commit()
 
     class _Proxy:
         shopify_domain = tenant.shopify_domain
@@ -313,34 +339,32 @@ async def shopify_sync(
 
     try:
         svc = ShopifyService(_Proxy())
-        log.info("ShopifyService initialized for domain=%s", tenant.shopify_domain)
     except Exception as exc:
-        log.exception("ShopifyService initialization failed: %s", exc)
+        log.exception("ShopifyService initialization failed")
         raise HTTPException(status_code=400, detail=f"تعذر الاتصال بـ Shopify: {exc}")
 
     # ── Fetch from Shopify ──────────────────────────────────
     try:
-        log.info("Fetching products...")
+        log.info("Fetching products (limit 50)...")
         shopify_products = await svc.sync_products(max_products=50)
         log.info("Fetched %s products", len(shopify_products))
         
-        log.info("Fetching orders...")
+        log.info("Fetching orders (limit 50)...")
         shopify_orders = await svc.sync_orders(max_orders=50)
         log.info("Fetched %s orders", len(shopify_orders))
         
-        log.info("Fetching customers...")
+        log.info("Fetching customers (limit 50)...")
         shopify_customers = await svc.sync_customers(max_customers=50)
         log.info("Fetched %s customers", len(shopify_customers))
     except Exception as exc:
-        log.exception("Shopify sync fetch failed: %s", exc)
-        raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
+        log.exception("Shopify API fetch failed")
+        raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify (تأكد من الـ Permissions): {exc}")
 
     products_synced = 0
     customers_synced = 0
     orders_synced = 0
 
     # ── Sync Products ───────────────────────────────────────
-    from models.product import Product
     log.info("Upserting products...")
     for p in shopify_products:
         sid = str(p.get("id", ""))
@@ -354,13 +378,16 @@ async def shopify_sync(
         variants = p.get("variants", [])
         price = float(variants[0].get("price", 0)) if variants else 0.0
         inventory = sum(v.get("inventory_quantity") or 0 for v in variants)
-        image_url = (p.get("images") or [{}])[0].get("src")
+        
+        # Handle images
+        images = p.get("images") or []
+        image_url = images[0].get("src") if images else None
         
         if not product:
             product = Product(tenant_id=tenant.id, shopify_product_id=sid)
             db.add(product)
             
-        product.title = p.get("title") or "Unknown"
+        product.title = p.get("title") or "Unknown Product"
         product.body_html = p.get("body_html")
         product.vendor = p.get("vendor")
         product.product_type = p.get("product_type")
@@ -371,7 +398,6 @@ async def shopify_sync(
         products_synced += 1
 
     await db.flush()
-    log.info("Products upserted: %s", products_synced)
 
     # ── Sync Customers ──────────────────────────────────────
     log.info("Upserting customers...")
@@ -386,7 +412,7 @@ async def shopify_sync(
         phone_raw = (c.get("phone") or "").strip()
         phone = "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None
         email = (c.get("email") or "").strip().lower() or None
-        full_name = " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or None
+        full_name = " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or "Shopify Customer"
 
         if not customer:
             customer = Customer(tenant_id=tenant.id, shopify_customer_id=sid)
@@ -400,7 +426,6 @@ async def shopify_sync(
         customers_synced += 1
 
     await db.flush()
-    log.info("Customers upserted: %s", customers_synced)
 
     # ── Sync Orders ─────────────────────────────────────────
     log.info("Upserting orders...")
@@ -422,14 +447,14 @@ async def shopify_sync(
             order = Order(tenant_id=tenant.id, shopify_order_id=sid)
             db.add(order)
             
-        order.shopify_order_number = o.get("name") or str(o.get("order_number") or "") or None
+        order.shopify_order_number = o.get("name") or str(o.get("order_number") or "") or f"#{sid}"
         order.customer_id = customer.id if customer else None
         order.total_price = float(o.get("total_price") or 0)
         order.currency = o.get("currency") or "EGP"
         orders_synced += 1
 
     await db.commit()
-    log.info("Orders upserted: %s. Sync finished successfully.", orders_synced)
+    log.info("Sync complete: products=%s customers=%s orders=%s", products_synced, customers_synced, orders_synced)
     
     return {
         "synced": {

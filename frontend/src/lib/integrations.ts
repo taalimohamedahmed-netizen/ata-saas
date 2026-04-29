@@ -41,6 +41,11 @@ export const syncShopify = async (): Promise<{ synced: { orders: number; custome
   return res.data;
 };
 
+export const disconnectShopify = async (): Promise<{ success: boolean }> => {
+  const res = await api.post("/integrations/shopify/disconnect");
+  return res.data;
+};
+
 export interface AISettings {
   ai_model: string;
   ai_system_prompt: string | null;

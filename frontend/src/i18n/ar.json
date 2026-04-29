@@ -1,4 +1,26 @@
 {
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "conversations": "المحادثات",
+    "orders": "الطلبات",
+    "orderConfirmation": "تأكيد الطلبات",
+    "customers": "العملاء",
+    "products": "المنتجات",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
+  },
+  "dashboard": {
+    "greeting": "مرحباً،",
+    "greetingSub": "هذا ملخص نشاط متجرك اليوم",
+    "totalOrders": "إجمالي الطلبات",
+    "confirmedOrders": "طلبات مؤكدة",
+    "revenue": "الإيرادات",
+    "customers": "العملاء",
+    "vipCustomers": "عملاء VIP",
+    "viewAll": "عرض الكل",
+    "recentOrders": "آخر الطلبات",
+    "activeConversations": "المحادثات النشطة"
+  },
   "common": {
     "loading": "جاري التحميل...",
     "error": "حدث خطأ",
@@ -10,6 +32,25 @@
     "close": "إغلاق",
     "back": "رجوع",
     "next": "التالي",
-    "submit": "إرسال"
+    "submit": "إرسال",
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "store": "المتجر"
+  },
+  "agent": {
+    "title": "مساعد الإعداد",
+    "subtitle": "ATA Setup Agent",
+    "placeholder": "اكتب رسالتك...",
+    "thinking": "جاري التفكير...",
+    "sendHint": "Enter للإرسال · Shift+Enter لسطر جديد",
+    "welcome": "أهلاً! أنا مساعد الإعداد الذكي لـ ATA. يمكنني مساعدتك في ربط Shopify وWhatsApp وضبط إعدادات الذكاء الاصطناعي. بماذا تريد البدء؟",
+    "shopifyButton": "افتح صفحة تفويض Shopify",
+    "connectionError": "حدث خطأ في الاتصال، حاول مرة أخرى."
+  },
+  "settings": {
+    "integrations": "التكاملات",
+    "ai": "الذكاء الاصطناعي",
+    "whatsapp": "واتساب",
+    "shopify": "شوبيفاي"
   }
 }

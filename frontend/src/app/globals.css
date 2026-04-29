@@ -1,107 +1,103 @@
 /* ─── Google Fonts ─── */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;1,14..32,400&family=Poppins:wght@600;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap");
 
 @import "tailwindcss";
 
-/* ─── Tailwind v4 Theme ─── */
-@theme inline {
-  /* Brand colors */
-  --color-navy: #0A0F1E;
-  --color-navy-light: #0F172A;
-  --color-navy-card: #1E293B;
-  --color-accent: #3B82F6;
-  --color-accent-hover: #2563EB;
-  --color-gold: #F59E0B;
-  --color-gold-hover: #D97706;
-  --color-surface: #1E293B;
-  --color-border: #334155;
-  --color-muted: #94A3B8;
-  --color-danger: #EF4444;
-  --color-success: #22C55E;
+/* ─── Design Tokens (dynamic — override per theme) ─── */
+@theme {
+  --color-navy:        var(--c-navy);
+  --color-navy-light:  var(--c-navy-light);
+  --color-navy-card:   var(--c-navy-card);
+  --color-surface:     var(--c-surface);
+  --color-border:      var(--c-border);
+  --color-muted:       var(--c-muted);
+  --color-text:        var(--c-text);
+  --color-accent:      #3278E8;
+  --color-accent-hover:#1E5FCC;
+  --color-danger:      #EF4444;
+  --color-success:     #22C55E;
+  --color-gold:        #F59E0B;
+  --color-gold-hover:  #D97706;
 
-  /* Fonts */
-  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-arabic: "IBM Plex Sans Arabic", "Plus Jakarta Sans", system-ui, sans-serif;
-  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans:    "Inter", system-ui, sans-serif;
+  --font-heading: "Poppins", "Inter", system-ui, sans-serif;
+  --font-arabic:  "IBM Plex Sans Arabic", "Inter", system-ui, sans-serif;
 }
+
+/* ─── Dark Theme (default) ─── */
+:root {
+  --c-navy:       #0A0F1E;
+  --c-navy-light: #0F172A;
+  --c-navy-card:  #121826;
+  --c-surface:    #1A2336;
+  --c-border:     rgba(30, 59, 138, 0.5);
+  --c-muted:      #9EB4CC;
+  --c-text:       #FFFFFF;
+  --c-text-sub:   #9EB4CC;
+  --c-input-bg:   rgba(255,255,255,0.06);
+  --c-hover:      rgba(255,255,255,0.05);
+}
+
+/* ─── Light Theme ─── */
+html:not(.dark) {
+  --c-navy:       #F0F4FF;
+  --c-navy-light: #E8EEFF;
+  --c-navy-card:  #FFFFFF;
+  --c-surface:    #FFFFFF;
+  --c-border:     #C8D8F0;
+  --c-muted:      #4A6B8A;
+  --c-text:       #0A0F1E;
+  --c-text-sub:   #4A6B8A;
+  --c-input-bg:   rgba(0,0,0,0.04);
+  --c-hover:      rgba(50, 120, 232, 0.06);
+}
+
+/* ─── Font per language ─── */
+html[lang="ar"] body { font-family: var(--font-arabic); }
+html[lang="en"] body { font-family: var(--font-sans); }
+html[lang="ar"] h1,
+html[lang="ar"] h2,
+html[lang="ar"] h3 { font-family: var(--font-arabic); }
+html[lang="en"] h1,
+html[lang="en"] h2,
+html[lang="en"] h3 { font-family: var(--font-heading); }
 
 /* ─── Base ─── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; }
 
-html {
-  height: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+html { height: 100%; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
 body {
   min-height: 100%;
   margin: 0;
-  font-family: var(--font-sans);
-  background: var(--color-navy);
-  color: #F1F5F9;
+  background: var(--c-navy);
+  color: var(--c-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* ─── Scrollbar ─── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 9999px;
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 9999px; }
 
-/* ─── Focus rings ─── */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
+/* ─── Focus ─── */
+:focus-visible { outline: 2px solid #3278E8; outline-offset: 2px; }
 
 /* ─── Selection ─── */
-::selection {
-  background: rgba(59, 130, 246, 0.3);
-  color: white;
-}
+::selection { background: rgba(50, 120, 232, 0.25); color: var(--c-text); }
 
-/* ─── Animated gradient mesh for auth brand panel ─── */
+/* ─── Auth gradient ─── */
 @keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
 }
-
 .gradient-mesh {
-  background: linear-gradient(
-    135deg,
-    #0A0F1E 0%,
-    #1E1B4B 25%,
-    #0A0F1E 50%,
-    #172554 75%,
-    #0A0F1E 100%
-  );
+  background: linear-gradient(135deg, #0A0F1E 0%, #1E1B4B 25%, #0A0F1E 50%, #172554 75%, #0A0F1E 100%);
   background-size: 400% 400%;
   animation: gradient-shift 15s ease infinite;
 }
 
-/* ─── Subtle glow effect ─── */
+/* ─── Glow ─── */
 .glow-accent {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15),
-              0 0 60px rgba(59, 130, 246, 0.05);
-}
-
-/* ─── Arabic text helper ─── */
-.text-arabic {
-  font-family: var(--font-arabic);
-  direction: rtl;
+  box-shadow: 0 0 20px rgba(50,120,232,0.15), 0 0 60px rgba(50,120,232,0.05);
 }

@@ -15,118 +15,105 @@ import {
   Package,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
+import { useI18n } from "@/context/i18n-context";
+import { ControlsBar } from "@/components/ui/controls-bar";
 import { SetupChatWidget } from "@/components/setup-agent/chat-widget";
 
-const navItems = [
-  { icon: LayoutDashboard, label: "لوحة التحكم", href: "/dashboard" },
-  { icon: MessageSquare, label: "المحادثات", href: "/dashboard/conversations" },
-  { icon: ShoppingCart, label: "الطلبات", href: "/dashboard/orders" },
-  { icon: ClipboardCheck, label: "تأكيد الطلبات", href: "/dashboard/order-confirmation" },
-  { icon: Users, label: "العملاء", href: "/dashboard/customers" },
-  { icon: Package, label: "المنتجات", href: "/dashboard/products" },
-  { icon: Settings, label: "الإعدادات", href: "/dashboard/settings/integrations" },
-];
-
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { isAuthenticated, tenantName, logout } = useAuthStore();
+  const { t, locale, dir } = useI18n();
   const [mounted, setMounted] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Wait for Zustand to finish hydration
-    const checkHydration = () => {
-      if (useAuthStore.persist.hasHydrated()) {
-        setHydrated(true);
-      } else {
-        setTimeout(checkHydration, 50);
-      }
+    const check = () => {
+      if (useAuthStore.persist.hasHydrated()) setHydrated(true);
+      else setTimeout(check, 50);
     };
-    checkHydration();
+    check();
   }, []);
 
   useEffect(() => {
-    // Only redirect if we have hydrated AND mounted, and still not authenticated
-    if (mounted && hydrated && !isAuthenticated) {
-      router.replace("/login");
-    }
+    if (mounted && hydrated && !isAuthenticated) router.replace("/login");
   }, [isAuthenticated, router, mounted, hydrated]);
 
-  // Prevent flash of login or empty state during hydration
   if (!mounted || !hydrated || !isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center bg-navy">
+      <div className="flex h-screen items-center justify-center bg-[var(--c-navy)]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       </div>
     );
   }
 
+  const navItems = [
+    { icon: LayoutDashboard, label: t("nav", "dashboard"),         href: "/dashboard" },
+    { icon: MessageSquare,   label: t("nav", "conversations"),     href: "/dashboard/conversations" },
+    { icon: ShoppingCart,    label: t("nav", "orders"),            href: "/dashboard/orders" },
+    { icon: ClipboardCheck,  label: t("nav", "orderConfirmation"), href: "/dashboard/order-confirmation" },
+    { icon: Users,           label: t("nav", "customers"),         href: "/dashboard/customers" },
+    { icon: Package,         label: t("nav", "products"),          href: "/dashboard/products" },
+    { icon: Settings,        label: t("nav", "settings"),          href: "/dashboard/settings/integrations" },
+  ];
+
+  const fontFamily = locale === "ar"
+    ? '"IBM Plex Sans Arabic", sans-serif'
+    : '"Inter", sans-serif';
+
   return (
-    <div className="flex h-screen bg-navy">
+    <div className="flex h-screen bg-[var(--c-navy)]" dir={dir}>
       {/* ═══════ SIDEBAR ═══════ */}
-      <aside className="flex w-16 flex-col items-center border-r border-border bg-navy-light py-4 lg:w-56 lg:items-stretch lg:px-3">
+      <aside className="flex w-16 flex-col items-center border-border bg-[var(--c-navy-light)] py-4 lg:w-56 lg:items-stretch lg:px-3"
+        style={{ borderInlineEndWidth: 1, borderInlineEndStyle: "solid" }}>
+
         {/* Logo */}
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 lg:w-full lg:gap-3 lg:px-3 mb-6">
           <Bot className="h-5 w-5 text-accent shrink-0" />
-          <span className="hidden lg:block text-lg font-extrabold text-white tracking-tight">
+          <span className="hidden lg:block text-lg font-extrabold text-[var(--c-text)] tracking-tight"
+            style={{ fontFamily: '"Poppins", sans-serif' }}>
             ATA
           </span>
         </div>
 
-        {/* Nav Items */}
-        <nav className="flex flex-1 flex-col gap-1">
+        {/* Nav */}
+        <nav className="flex flex-1 flex-col gap-0.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             const base = "flex h-10 w-10 items-center justify-center rounded-lg transition-colors lg:w-full lg:gap-3 lg:px-3 lg:justify-start";
             const active = "bg-accent/15 text-accent";
-            const inactive = "text-muted hover:bg-white/5 hover:text-white";
-            const cls = `${base} ${isActive ? active : inactive}`;
+            const inactive = "text-muted hover:bg-[var(--c-hover)] hover:text-[var(--c-text)]";
             return (
-              <Link key={item.label} href={item.href} className={cls} title={item.label}>
+              <Link key={item.href} href={item.href} className={`${base} ${isActive ? active : inactive}`} title={item.label}>
                 <item.icon className="h-5 w-5 shrink-0" />
-                <span className="hidden lg:block text-sm" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-                  {item.label}
-                </span>
+                <span className="hidden lg:block text-sm" style={{ fontFamily }}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        {/* User / Logout */}
+        {/* Footer — store name + controls + logout */}
         <div className="mt-auto space-y-2">
-          <div className="hidden lg:block px-3">
-            <p
-              className="text-xs text-muted truncate"
-              style={{
-                fontFamily: '"IBM Plex Sans Arabic", sans-serif',
-              }}
-            >
-              {tenantName || "المتجر"}
+          <div className="hidden lg:flex items-center justify-between px-3">
+            <p className="text-xs text-muted truncate" style={{ fontFamily }}>
+              {tenantName || t("common", "store")}
             </p>
+            <ControlsBar />
           </div>
+
+          {/* Mobile: stacked icons */}
+          <div className="flex lg:hidden flex-col items-center gap-1">
+            <ControlsBar collapsed />
+          </div>
+
           <button
-            onClick={() => {
-              logout();
-              router.replace("/login");
-            }}
+            onClick={() => { logout(); router.replace("/login"); }}
             className="flex h-10 w-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-danger/10 hover:text-danger lg:w-full lg:gap-3 lg:px-3 lg:justify-start"
-            title="تسجيل الخروج"
+            title={t("nav", "logout")}
           >
             <LogOut className="h-5 w-5 shrink-0" />
-            <span
-              className="hidden lg:block text-sm"
-              style={{
-                fontFamily: '"IBM Plex Sans Arabic", sans-serif',
-              }}
-            >
-              تسجيل الخروج
-            </span>
+            <span className="hidden lg:block text-sm" style={{ fontFamily }}>{t("nav", "logout")}</span>
           </button>
         </div>
       </aside>

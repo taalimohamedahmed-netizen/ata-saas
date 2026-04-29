@@ -27,7 +27,7 @@ from core.database import get_redis
 log = logging.getLogger("ata.session")
 
 SESSION_TTL = int(os.getenv("SESSION_TTL", "86400"))  # 24h default
-HISTORY_LIMIT = 20  # keep last N messages per conversation
+HISTORY_LIMIT = 50  # keep last N messages per conversation
 
 
 def _key(tenant_id: int, phone: str) -> str:

@@ -179,7 +179,7 @@ class AIService:
             system_prompt += f"\n\n=== CONTEXT ===\n{extra_context}\n"
 
         messages: list[dict[str, str]] = []
-        for h in history[-10:]:
+        for h in history[-14:]: # Increased to 14 messages (7 turns)
             role = h.get("role")
             content = h.get("content", "")
             if role in ("user", "assistant") and content:

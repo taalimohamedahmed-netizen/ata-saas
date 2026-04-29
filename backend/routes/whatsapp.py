@@ -125,16 +125,34 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
 
     user_message_text = text_content or f"[{msg_type}]"
 
-    # 2. Persist the user's message immediately — inbox shows it even if AI fails.
+    # 2. Load session and append history
     await SessionManager.append_history(tenant.id, phone, "user", user_message_text)
     session = await SessionManager.get(tenant.id, phone)
+
+    # 2b. MEMORY FALLBACK: If session history is empty (Redis down/restart), load from DB
+    if not session.get("history"):
+        log.info("Redis history empty, attempting fallback to DB history")
+        result = await db.execute(
+            select(Conversation).where(Conversation.tenant_id == tenant.id, Conversation.customer_id == customer.id)
+        )
+        convo = result.scalar_one_or_none()
+        if convo and isinstance(convo.context, dict) and convo.context.get("history_tail"):
+            session["history"] = convo.context["history_tail"]
+            # Also add the current message we just received
+            session["history"].append({
+                "role": "user",
+                "content": user_message_text,
+                "ts": datetime.now(timezone.utc).isoformat()
+            })
+
+    # 2c. Persist the user's message immediately — inbox shows it even if AI fails.
     await _record_conversation(
         db, tenant.id, customer.id, session,
         Intent.GENERAL,
         new_message={"role": "user", "content": user_message_text},
     )
 
-    # 2b. Check if AI is paused — human takes over, no auto-reply.
+    # 2d. Check if AI is paused — human takes over, no auto-reply.
     if await _is_ai_paused(db, tenant.id, customer.id):
         log.info("AI paused for tenant=%s customer=%s — skipping auto-reply", tenant.id, customer.id)
         return

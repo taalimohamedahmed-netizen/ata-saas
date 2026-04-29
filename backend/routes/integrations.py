@@ -480,6 +480,45 @@ async def shopify_disconnect(
 
 
 # ============================================================
+# AI SETTINGS
+# ============================================================
+
+class AISettingsUpdateIn(BaseModel):
+    ai_model: str | None = Field(default=None, max_length=120)
+    ai_system_prompt: str | None = Field(default=None)
+
+
+@router.get("/ai/settings")
+async def get_ai_settings(tenant: Tenant = Depends(get_current_tenant)) -> dict[str, Any]:
+    return {
+        "ai_model": tenant.ai_model or "openai/gpt-4o-mini",
+        "ai_system_prompt": tenant.ai_system_prompt,
+        "available_models": [
+            {"id": "openai/gpt-4o-mini", "label": "GPT-4o Mini"},
+            {"id": "openai/gpt-4o", "label": "GPT-4o"},
+            {"id": "anthropic/claude-3-5-haiku", "label": "Claude 3.5 Haiku"},
+            {"id": "anthropic/claude-3-5-sonnet", "label": "Claude 3.5 Sonnet"},
+            {"id": "google/gemini-flash-1.5", "label": "Gemini Flash 1.5"},
+        ]
+    }
+
+
+@router.post("/ai/settings")
+async def update_ai_settings(
+    payload: AISettingsUpdateIn,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, bool]:
+    if payload.ai_model is not None:
+        tenant.ai_model = payload.ai_model
+    if payload.ai_system_prompt is not None:
+        tenant.ai_system_prompt = payload.ai_system_prompt
+    
+    await db.commit()
+    return {"success": True}
+
+
+# ============================================================
 # WHATSAPP — Connect
 # ============================================================
 

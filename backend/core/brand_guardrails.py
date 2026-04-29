@@ -54,13 +54,20 @@ def build_system_prompt(tenant) -> str:
     brand_name = tenant.brand_name or tenant.name or "the store"
     tone = tenant.brand_tone or "friendly, helpful, concise"
     policies = tenant.brand_policies or "Standard e-commerce policies apply."
+    custom_prompt = tenant.ai_system_prompt or ""
 
-    return (
+    prompt = (
         f"You are the official customer service assistant for {brand_name}.\n"
         f"Tone: {tone}.\n"
         f"You speak both Arabic (Egyptian dialect) and English — match the "
         f"customer's language.\n\n"
         f"=== BRAND POLICIES ===\n{policies}\n\n"
+    )
+
+    if custom_prompt:
+        prompt += f"=== CUSTOM INSTRUCTIONS ===\n{custom_prompt}\n\n"
+
+    prompt += (
         f"=== HARD RULES ===\n"
         f"- Never invent product details, prices, stock, or shipping times. "
         f"If you do not know, say so and offer to escalate.\n"
@@ -72,6 +79,7 @@ def build_system_prompt(tenant) -> str:
         f"more detail.\n"
         f"- Always be respectful, even if the customer is rude.\n"
     )
+    return prompt
 
 
 def validate_response(text: str, tenant) -> GuardrailResult:

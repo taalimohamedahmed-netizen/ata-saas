@@ -9,6 +9,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy import select, desc
+from models.product import Product
+from models.order import Order
 from services.ai_service import AIService
 
 log = logging.getLogger("ata.handlers.brand")
@@ -26,11 +29,41 @@ class BrandHandler:
         customer,
         message: str,
         session: dict[str, Any],
+        db=None, # Added db dependency
     ) -> str:
-        """Generate an on-brand reply with no extra context beyond history."""
+        """Generate an on-brand reply with database context (products + orders)."""
+        
+        extra_context = ""
+        
+        if db:
+            # 1. Fetch available products (limit to 10 for context size)
+            res = await db.execute(
+                select(Product)
+                .where(Product.tenant_id == tenant.id, Product.status == "active")
+                .limit(10)
+            )
+            products = res.scalars().all()
+            if products:
+                extra_context += "\n=== AVAILABLE PRODUCTS ===\n"
+                for p in products:
+                    extra_context += f"- {p.title}: {p.price} EGP (Stock: {p.inventory_qty})\n"
+
+            # 2. Fetch customer's recent orders
+            res = await db.execute(
+                select(Order)
+                .where(Order.tenant_id == tenant.id, Order.customer_id == customer.id)
+                .order_by(desc(Order.created_at))
+                .limit(3)
+            )
+            orders = res.scalars().all()
+            if orders:
+                extra_context += "\n=== CUSTOMER RECENT ORDERS ===\n"
+                for o in orders:
+                    extra_context += f"- Order {o.shopify_order_number}: {o.status} ({o.total_price} {o.currency})\n"
+
         return await self.ai.generate_response(
             tenant=tenant,
             history=session.get("history", []),
             user_message=message,
-            extra_context=None,
+            extra_context=extra_context if extra_context else None,
         )

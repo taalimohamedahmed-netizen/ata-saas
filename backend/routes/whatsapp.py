@@ -159,7 +159,7 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
         elif intent in (Intent.UPSELL, Intent.ABANDONED_CART):
             reply = await RevenueHandler(ai_service=ai).handle(tenant, customer, text_content or "", intent, session)
         else:
-            reply = await BrandHandler(ai_service=ai).handle(tenant, customer, text_content or "", session)
+            reply = await BrandHandler(ai_service=ai).handle(tenant, customer, text_content or "", session, db=db)
     except Exception:
         log.exception("AI Processing failed — using default error reply")
 

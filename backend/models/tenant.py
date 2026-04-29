@@ -64,6 +64,7 @@ class Tenant(Base):
     brand_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     brand_tone: Mapped[str | None] = mapped_column(String(255), nullable=True)
     brand_policies: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ----- Egyptian payments -----
     instapay_number: Mapped[str | None] = mapped_column(String(40), nullable=True)

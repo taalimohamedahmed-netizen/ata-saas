@@ -312,22 +312,21 @@ async def shopify_sync(
     background_tasks: BackgroundTasks,
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
-    log.info("Queuing Shopify sync in background for tenant_id=%s", tenant.id)
-    
     if not tenant.shopify_domain or not tenant.shopify_token:
         raise HTTPException(status_code=400, detail="Shopify غير متصل")
 
+    redis = await get_redis()
+    if redis and await redis.get(f"tenant:{tenant.id}:syncing") == "1":
+        raise HTTPException(status_code=409, detail="المزامنة جارية بالفعل، انتظر حتى تنتهي")
+
+    log.info("Queuing Shopify sync for tenant_id=%s", tenant.id)
     background_tasks.add_task(
         _run_shopify_sync_background,
         tenant.id,
         tenant.shopify_domain,
-        tenant.shopify_token
+        tenant.shopify_token,
     )
-
-    return {
-        "status": "queued",
-        "message": "جاري سحب البيانات في الخلفية. ستكون متاحة قريباً."
-    }
+    return {"status": "queued", "message": "جاري سحب البيانات في الخلفية. ستكون متاحة قريباً."}
 
 from core.database import get_redis
 

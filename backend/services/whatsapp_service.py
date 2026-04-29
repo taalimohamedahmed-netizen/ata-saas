@@ -18,6 +18,8 @@ from typing import Any
 
 import httpx
 
+from core.encryption import decrypt
+
 log = logging.getLogger("ata.whatsapp")
 
 WHATSAPP_API_BASE = os.getenv(
@@ -35,12 +37,16 @@ class WhatsAppService:
             raise ValueError(
                 f"Tenant {tenant.id} is not connected to WhatsApp"
             )
+        
+        # Token is stored encrypted in DB
+        plain_token = decrypt(tenant.whatsapp_token)
+        
         self.tenant = tenant
         self.base = (
             f"{WHATSAPP_API_BASE}/{tenant.whatsapp_phone_id}/messages"
         )
         self.headers = {
-            "Authorization": f"Bearer {tenant.whatsapp_token}",
+            "Authorization": f"Bearer {plain_token}",
             "Content-Type": "application/json",
         }
 

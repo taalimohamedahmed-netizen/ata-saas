@@ -251,12 +251,19 @@ async def shopify_status(tenant: Tenant = Depends(get_current_tenant)) -> dict[s
         {slug: _webhook_address(tenant.id, slug) for _, slug in SHOPIFY_WEBHOOK_TOPICS}
         if connected else {}
     )
+
+    is_syncing = False
+    redis = await get_redis()
+    if redis:
+        is_syncing = await redis.get(f"tenant:{tenant.id}:syncing") == "1"
+
     return {
         "connected": connected,
         "domain": tenant.shopify_domain,
         "connected_at": tenant.shopify_connected_at.isoformat() if tenant.shopify_connected_at else None,
         "webhooks": webhooks,
         "webhook_urls": webhook_urls,
+        "is_syncing": is_syncing,
     }
 
 
@@ -303,7 +310,6 @@ from fastapi import BackgroundTasks
 @router.post("/shopify/sync")
 async def shopify_sync(
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
     log.info("Queuing Shopify sync in background for tenant_id=%s", tenant.id)
@@ -323,36 +329,45 @@ async def shopify_sync(
         "message": "جاري سحب البيانات في الخلفية. ستكون متاحة قريباً."
     }
 
+from core.database import get_redis
+
 async def _run_shopify_sync_background(tenant_id: int, shopify_domain: str, encrypted_token: str):
-    from core.database import SessionLocal
+    from core.database import SessionLocal, _is_sqlite
+
+    redis = await get_redis()
+    if redis:
+        await redis.set(f"tenant:{tenant_id}:syncing", "1", ex=3600)
+
     class _Proxy:
-        shopify_domain = shopify_domain
-        shopify_token = decrypt(encrypted_token)
+        pass
+    _Proxy.shopify_domain = shopify_domain
+    _Proxy.shopify_token = decrypt(encrypted_token)
 
     try:
         svc = ShopifyService(_Proxy())
-        # Fetch ALL data using the new cursor pagination
         shopify_products = await svc.sync_products()
-        shopify_orders = await svc.sync_orders()
         shopify_customers = await svc.sync_customers()
+        shopify_orders = await svc.sync_orders()
         log.info(
-            "Shopify BG fetched: tenant=%s products=%d orders=%d customers=%d",
-            tenant_id, len(shopify_products), len(shopify_orders), len(shopify_customers),
+            "Shopify BG fetched: tenant=%s products=%d customers=%d orders=%d",
+            tenant_id, len(shopify_products), len(shopify_customers), len(shopify_orders),
         )
-    except Exception as exc:
-        log.exception("Shopify Background sync fetch failed for tenant=%s", tenant_id)
+    except Exception:
+        log.exception("Shopify sync fetch failed for tenant=%s", tenant_id)
+        if redis:
+            await redis.delete(f"tenant:{tenant_id}:syncing")
         return
 
     async with SessionLocal() as db:
         try:
-            # ── Process Products ────────────────────────────────────
-            products_by_sid: dict[str, dict[str, Any]] = {}
+            # ── Products ────────────────────────────────────────────
+            products_to_upsert: list[dict[str, Any]] = []
             for p in shopify_products:
                 sid = str(p.get("id") or "")
                 if not sid:
                     continue
                 variants = p.get("variants") or []
-                products_by_sid[sid] = {
+                products_to_upsert.append({
                     "tenant_id": tenant_id,
                     "shopify_product_id": sid,
                     "title": p.get("title") or "Unknown",
@@ -365,17 +380,40 @@ async def _run_shopify_sync_background(tenant_id: int, shopify_domain: str, encr
                     "inventory_qty": sum((v.get("inventory_quantity") or 0) for v in variants),
                     "image_url": ((p.get("images") or [{}])[0] or {}).get("src"),
                     "updated_at": datetime.now(timezone.utc),
-                }
-            products_to_upsert = list(products_by_sid.values())
+                })
 
-            # ── Process Customers ───────────────────────────────────
-            customers_by_sid: dict[str, dict[str, Any]] = {}
+            if products_to_upsert:
+                if _is_sqlite:
+                    for item in products_to_upsert:
+                        res = await db.execute(
+                            select(Product).where(
+                                Product.tenant_id == item["tenant_id"],
+                                Product.shopify_product_id == item["shopify_product_id"],
+                            )
+                        )
+                        existing = res.scalar_one_or_none()
+                        if existing:
+                            for k, v in item.items():
+                                if k not in ("tenant_id", "shopify_product_id"):
+                                    setattr(existing, k, v)
+                        else:
+                            db.add(Product(**item))
+                else:
+                    stmt = pg_upsert(Product).values(products_to_upsert)
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_product_tenant_shopify_id",
+                        set_={k: getattr(stmt.excluded, k) for k in products_to_upsert[0] if k not in ("tenant_id", "shopify_product_id")},
+                    )
+                    await db.execute(stmt)
+
+            # ── Customers ───────────────────────────────────────────
+            customers_to_upsert: list[dict[str, Any]] = []
             for c in shopify_customers:
                 sid = str(c.get("id") or "")
                 if not sid:
                     continue
                 phone_raw = (c.get("phone") or "").strip()
-                customers_by_sid[sid] = {
+                customers_to_upsert.append({
                     "tenant_id": tenant_id,
                     "shopify_customer_id": sid,
                     "phone": "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None,
@@ -383,56 +421,89 @@ async def _run_shopify_sync_background(tenant_id: int, shopify_domain: str, encr
                     "name": " ".join(part for part in [c.get("first_name"), c.get("last_name")] if part).strip() or "Customer",
                     "total_orders": int(c.get("orders_count") or 0),
                     "total_spent": float(c.get("total_spent") or 0),
-                }
-            customers_to_upsert = list(customers_by_sid.values())
-
-            # ── Database Write ──────────────────────────────
-            if products_to_upsert:
-                stmt = pg_upsert(Product).values(products_to_upsert)
-                stmt = stmt.on_conflict_do_update(
-                    constraint="uq_product_tenant_shopify_id",
-                    set_={k: getattr(stmt.excluded, k) for k in products_to_upsert[0].keys() if k not in ["tenant_id", "shopify_product_id"]}
-                )
-                await db.execute(stmt)
+                })
 
             if customers_to_upsert:
-                stmt = pg_upsert(Customer).values(customers_to_upsert)
-                stmt = stmt.on_conflict_do_update(
-                    constraint="uq_customer_tenant_shopify_id",
-                    set_={k: getattr(stmt.excluded, k) for k in customers_to_upsert[0].keys() if k not in ["tenant_id", "shopify_customer_id"]}
-                )
-                await db.execute(stmt)
-                
+                if _is_sqlite:
+                    for item in customers_to_upsert:
+                        res = await db.execute(
+                            select(Customer).where(
+                                Customer.tenant_id == item["tenant_id"],
+                                Customer.shopify_customer_id == item["shopify_customer_id"],
+                            )
+                        )
+                        existing = res.scalar_one_or_none()
+                        if existing:
+                            for k, v in item.items():
+                                if k not in ("tenant_id", "shopify_customer_id"):
+                                    setattr(existing, k, v)
+                        else:
+                            db.add(Customer(**item))
+                else:
+                    stmt = pg_upsert(Customer).values(customers_to_upsert)
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_customer_tenant_shopify_id",
+                        set_={k: getattr(stmt.excluded, k) for k in customers_to_upsert[0] if k not in ("tenant_id", "shopify_customer_id")},
+                    )
+                    await db.execute(stmt)
+
             await db.flush()
 
-            orders_synced = 0
+            # Build shopify_customer_id → local DB id map in one query (avoids N queries for orders)
+            customer_sid_to_id: dict[str, int] = {}
+            if shopify_customers:
+                rows = await db.execute(
+                    select(Customer.shopify_customer_id, Customer.id).where(Customer.tenant_id == tenant_id)
+                )
+                customer_sid_to_id = {row[0]: row[1] for row in rows.fetchall()}
+
+            # ── Orders ──────────────────────────────────────────────
+            orders_to_upsert: list[dict[str, Any]] = []
             for o in shopify_orders:
                 sid = str(o.get("id", ""))
-                if not sid: continue
-                
+                if not sid:
+                    continue
                 customer_sid = str((o.get("customer") or {}).get("id", ""))
-                customer_id = None
-                if customer_sid:
-                    res = await db.execute(select(Customer.id).where(Customer.tenant_id == tenant_id, Customer.shopify_customer_id == customer_sid))
-                    customer_id = res.scalar_one_or_none()
-
-                stmt = pg_upsert(Order).values({
+                orders_to_upsert.append({
                     "tenant_id": tenant_id,
                     "shopify_order_id": sid,
                     "shopify_order_number": o.get("name") or str(o.get("order_number") or ""),
-                    "customer_id": customer_id,
+                    "customer_id": customer_sid_to_id.get(customer_sid) if customer_sid else None,
                     "total_price": float(o.get("total_price") or 0),
                     "currency": o.get("currency") or "EGP",
                     "status": OrderStatus.PENDING.value,
-                }).on_conflict_do_nothing()
-                await db.execute(stmt)
-                orders_synced += 1
+                })
+
+            if orders_to_upsert:
+                if _is_sqlite:
+                    for item in orders_to_upsert:
+                        res = await db.execute(
+                            select(Order).where(
+                                Order.tenant_id == item["tenant_id"],
+                                Order.shopify_order_id == item["shopify_order_id"],
+                            )
+                        )
+                        if not res.scalar_one_or_none():
+                            db.add(Order(**item))
+                else:
+                    # Process in chunks of 500 to avoid very large single statements
+                    chunk_size = 500
+                    for i in range(0, len(orders_to_upsert), chunk_size):
+                        chunk = orders_to_upsert[i : i + chunk_size]
+                        stmt = pg_upsert(Order).values(chunk).on_conflict_do_nothing()
+                        await db.execute(stmt)
 
             await db.commit()
-            log.info("Background Sync complete for tenant=%s", tenant_id)
-        except Exception as exc:
+            log.info(
+                "Shopify sync complete tenant=%s: %d products, %d customers, %d orders",
+                tenant_id, len(products_to_upsert), len(customers_to_upsert), len(orders_to_upsert),
+            )
+        except Exception:
             await db.rollback()
-            log.exception("Database Background sync failed for tenant=%s", tenant_id)
+            log.exception("Shopify DB sync failed for tenant=%s", tenant_id)
+        finally:
+            if redis:
+                await redis.delete(f"tenant:{tenant_id}:syncing")
 
 
 # ============================================================

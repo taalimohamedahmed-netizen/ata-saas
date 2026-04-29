@@ -145,13 +145,14 @@ class ShopifyService:
     # Historical sync helpers (Cursor-based Pagination)
     # ----------------------------------------------------------------
     async def _paginate(self, path: str, resource_key: str, base_params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        """Fetch all pages of a resource using Link header pagination."""
+        """Fetch all pages of a resource using Link header cursor pagination."""
         all_items = []
         url = f"{self.base_url}{path}"
         params = {"limit": 250}
         if base_params:
             params.update(base_params)
-            
+        page = 0
+
         while url:
             async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
                 resp = await client.request(
@@ -160,37 +161,42 @@ class ShopifyService:
                     headers=self.headers,
                     params=params,
                 )
-            
+
             if resp.status_code == 429:
                 wait = float(resp.headers.get("Retry-After", "2"))
-                log.warning("Shopify rate limit hit — waiting %.1fs then retrying", wait)
+                log.warning("Shopify rate limit — waiting %.1fs (page %d, %d fetched so far)", wait, page, len(all_items))
                 await asyncio.sleep(wait)
                 continue
-                
+
             if resp.status_code >= 400:
                 log.error("Shopify GET %s → %s: %s", url, resp.status_code, resp.text[:300])
                 resp.raise_for_status()
-                
+
             data = resp.json() if resp.content else {}
             items = data.get(resource_key, [])
             all_items.extend(items)
-            
+            page += 1
+            log.debug("Shopify paginate %s page=%d batch=%d total=%d", resource_key, page, len(items), len(all_items))
+
             # Parse Link header to find the 'next' page
             link_header = resp.headers.get("Link", "")
             next_url = None
             if link_header:
-                links = link_header.split(",")
-                for link in links:
+                for link in link_header.split(","):
                     if 'rel="next"' in link:
                         start = link.find("<")
                         end = link.find(">")
                         if start != -1 and end != -1:
                             next_url = link[start + 1 : end]
                         break
-            
+
             url = next_url
-            params = None  # query params are already included in the next_url
-            
+            params = None  # already embedded in next_url
+
+            # Polite delay between pages to avoid hitting call-bucket limits
+            if url:
+                await asyncio.sleep(0.5)
+
         return all_items
 
     async def sync_orders(self) -> list[dict[str, Any]]:

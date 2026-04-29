@@ -14,6 +14,7 @@ export interface ShopifyStatus {
   connected_at: string | null;
   webhooks: Record<string, WebhookStatus>;
   webhook_urls: Record<string, string>;
+  is_syncing?: boolean;
 }
 
 

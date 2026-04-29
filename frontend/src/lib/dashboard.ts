@@ -32,6 +32,20 @@ export interface Customer {
   created_at: string | null;
 }
 
+export interface Conversation {
+  id: number;
+  customer_id: number;
+  platform: string;
+  current_flow: string | null;
+  current_step: string | null;
+  context: {
+    last_intent?: string;
+    history_tail?: Array<{ role: string; content: string }>;
+  };
+  updated_at: string | null;
+  customer?: Customer; // Optional joined customer data
+}
+
 export const getStats = async (): Promise<DashboardStats> => {
   const res = await api.get("/dashboard/stats");
   return res.data;
@@ -49,6 +63,16 @@ export const getCustomers = async (
 ): Promise<Customer[]> => {
   const res = await api.get("/dashboard/customers", {
     params: { limit, offset, ...(segment ? { segment } : {}) },
+  });
+  return res.data;
+};
+
+export const getConversations = async (
+  limit = 25,
+  offset = 0,
+): Promise<Conversation[]> => {
+  const res = await api.get("/dashboard/conversations", {
+    params: { limit, offset },
   });
   return res.data;
 };

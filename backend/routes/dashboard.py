@@ -166,23 +166,35 @@ async def list_conversations(
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> list[dict[str, Any]]:
-    """Most recent conversations for this tenant."""
-    rows = await db.execute(
+    """Most recent conversations for this tenant, including customer info."""
+    from sqlalchemy.orm import selectinload
+    
+    stmt = (
         select(Conversation)
         .where(Conversation.tenant_id == tenant.id)
+        .options(selectinload(Conversation.customer))
         .order_by(desc(Conversation.updated_at))
         .offset(offset)
         .limit(limit)
     )
+    
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    
     return [
         {
             "id": c.id,
             "customer_id": c.customer_id,
+            "customer": {
+                "id": c.customer.id,
+                "phone": c.customer.phone,
+                "name": c.customer.name,
+            } if c.customer else None,
             "platform": c.platform.value,
             "current_flow": c.current_flow,
             "current_step": c.current_step,
             "context": c.context,
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
         }
-        for c in rows.scalars().all()
+        for c in rows
     ]

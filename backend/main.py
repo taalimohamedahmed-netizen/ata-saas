@@ -23,6 +23,7 @@ from core.auth import TenantMiddleware  # noqa: E402
 from routes import auth as auth_routes  # noqa: E402
 from routes import dashboard as dashboard_routes  # noqa: E402
 from routes import integrations as integrations_routes  # noqa: E402
+from routes import settings as settings_routes  # noqa: E402
 from routes import webhook as webhook_routes  # noqa: E402
 from routes import whatsapp as whatsapp_routes  # noqa: E402
 
@@ -98,6 +99,7 @@ async def health():
 # ---------- Routers ----------
 app.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
 app.include_router(integrations_routes.router, prefix="/integrations", tags=["integrations"])
+app.include_router(settings_routes.router, prefix="/settings", tags=["settings"])
 app.include_router(webhook_routes.router, prefix="/webhook", tags=["webhook"])
 app.include_router(whatsapp_routes.router, prefix="/webhook", tags=["whatsapp"])
 app.include_router(dashboard_routes.router, prefix="/dashboard", tags=["dashboard"])

@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     JSON,
     DateTime,
     Enum,
@@ -55,6 +56,7 @@ class Conversation(Base):
 
     current_flow: Mapped[str | None] = mapped_column(String(60), nullable=True)
     current_step: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    ai_paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Free-form JSON for handler-specific state, persisted snapshots, etc.
     context: Mapped[dict[str, Any]] = mapped_column(

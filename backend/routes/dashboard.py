@@ -193,6 +193,7 @@ async def list_conversations(
             "platform": c.platform.value,
             "current_flow": c.current_flow,
             "current_step": c.current_step,
+            "ai_paused": c.ai_paused,
             "context": c.context,
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
         }

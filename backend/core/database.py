@@ -199,6 +199,13 @@ async def _run_column_migrations() -> None:
         """,
         "CREATE INDEX IF NOT EXISTS idx_products_tenant_id ON products(tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_products_shopify_product_id ON products(shopify_product_id)",
+
+        # AI provider per tenant (OpenRouter support)
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS openrouter_api_key TEXT",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ai_model VARCHAR(120)",
+
+        # AI pause flag per conversation (manual takeover)
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     async with engine.begin() as conn:
         for sql in migrations:

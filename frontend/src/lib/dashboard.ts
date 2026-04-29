@@ -38,12 +38,13 @@ export interface Conversation {
   platform: string;
   current_flow: string | null;
   current_step: string | null;
+  ai_paused: boolean;
   context: {
     last_intent?: string;
-    history_tail?: Array<{ role: string; content: string }>;
+    history_tail?: Array<{ role: string; content: string; manual?: boolean }>;
   };
   updated_at: string | null;
-  customer?: Customer; // Optional joined customer data
+  customer?: Customer;
 }
 
 export const getStats = async (): Promise<DashboardStats> => {

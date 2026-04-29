@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Plug } from "lucide-react";
+import { Bot, Plug } from "lucide-react";
 
 const tabs = [
   { icon: Plug, label: "التكاملات", href: "/dashboard/settings/integrations" },
+  { icon: Bot,  label: "الذكاء الاصطناعي", href: "/dashboard/settings/ai" },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

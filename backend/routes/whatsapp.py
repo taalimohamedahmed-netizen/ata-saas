@@ -125,9 +125,7 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
 
     user_message_text = text_content or f"[{msg_type}]"
 
-    # 2. Persist the user's message in the DB conversation context immediately.
-    #    This guarantees the message shows up in the inbox even if Redis is down
-    #    or AI processing later fails.
+    # 2. Persist the user's message immediately — inbox shows it even if AI fails.
     await SessionManager.append_history(tenant.id, phone, "user", user_message_text)
     session = await SessionManager.get(tenant.id, phone)
     await _record_conversation(
@@ -136,12 +134,17 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
         new_message={"role": "user", "content": user_message_text},
     )
 
+    # 2b. Check if AI is paused — human takes over, no auto-reply.
+    if await _is_ai_paused(db, tenant.id, customer.id):
+        log.info("AI paused for tenant=%s customer=%s — skipping auto-reply", tenant.id, customer.id)
+        return
+
     # 3. Classification & Dispatch
     reply = "عذراً، حدث خطأ ما. يرجى المحاولة لاحقاً."
     intent = Intent.GENERAL
 
     try:
-        ai = AIService()
+        ai = AIService(tenant=tenant)
         classifier = IntentClassifier(ai_service=ai)
         intent = await classifier.classify(text_content or "", session_context=session)
         log.info("Classified intent: %s", intent)
@@ -196,6 +199,17 @@ def _extract_text_and_meta(msg: dict[str, Any], msg_type: str) -> tuple[str, dic
         image = msg.get("image") or {}
         return image.get("caption") or "", {"type": "image", "media_id": image.get("id", "")}
     return "", {"type": msg_type}
+
+
+async def _is_ai_paused(db: AsyncSession, tenant_id: int, customer_id: int) -> bool:
+    """Return True if the merchant has paused the AI for this conversation."""
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.tenant_id == tenant_id, Conversation.customer_id == customer_id)
+        .limit(1)
+    )
+    convo = result.scalar_one_or_none()
+    return bool(convo and convo.ai_paused)
 
 
 async def _upsert_customer(db: AsyncSession, tenant_id: int, phone: str) -> Customer:

@@ -69,6 +69,10 @@ class Tenant(Base):
     instapay_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
     vodafone_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
+    # ----- AI provider (optional OpenRouter override) -----
+    openrouter_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)  # encrypted
+    ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)  # e.g. openai/gpt-4o-mini
+
     # ----- Status -----
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

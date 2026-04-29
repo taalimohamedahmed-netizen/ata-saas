@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink, Trash2, Bot, Sparkles, Save } from "lucide-react";
+import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks, syncShopify, disconnectShopify,
   getWhatsAppStatus, connectWhatsApp, verifyWhatsApp,
-  getAISettings, updateAISettings,
-  type ShopifyStatus, type WhatsAppStatus, type AISettings
+  type ShopifyStatus, type WhatsAppStatus,
 } from "@/lib/integrations";
 
 // ─── Tiny helpers ──────────────────────────────────────────
@@ -553,119 +552,6 @@ function WhatsAppSection() {
   );
 }
 
-// ─── AI Section ───────────────────────────────────────
-
-const DEFAULT_AI_PROMPT = `أنت المساعد الذكي الرسمي والوحيد للمتجر. مهمتك هي تقديم تجربة خدمة عملاء مذهلة وزيادة المبيعات من خلال ترشيح المنتجات المناسبة.
-
-أولاً: أسلوب التحدث:
-- تحدث باللهجة المصرية العامية الودودة (زي ما بنكلم صحابنا بس باحترام).
-- خليك "جدع" وحلال مشاكل، وردودك تكون قصيرة ومباشرة (ماتزودش عن 3 جمل إلا لو العميل طلب تفاصيل أكتر).
-- استخدم الإيموجيز (Emojis) بشكل خفيف عشان تخلي المحادثة لطيفة.
-
-ثانياً: التعامل مع البيانات (Database):
-- أمامك قسم اسمه [AVAILABLE PRODUCTS]: دي المنتجات اللي عندنا. لو العميل سأل عن حاجة، رشح له منها بالأرقام والأسعار الموجودة فقط. لو المنتج خلصان (Stock: 0)، قوله إنه هيتوفر قريباً ورشح له بديل.
-- أمامك قسم اسمه [CUSTOMER RECENT ORDERS]: دي طلبات العميل الحالية. لو سأل "فين الأوردر؟"، قوله حالته إيه فوراً (مثلاً: "أوردرك رقم 123 حالته حالياً Pending وجاري تجهيزه").
-
-ثالثاً: قواعد ممنوعة (Hard Rules):
-- ممنوع تماماً تألف أسعار أو مواصفات مش موجودة في البيانات اللي قدامك. لو مش عارف، قوله: "ثواني أتأكد لك من الفريق البشري وهرد عليك".
-- ممنوع تقول "أنا نموذج لغوي" أو "أنا ذكاء اصطناعي". قوله "أنا مساعد [اسم البراند] وبخدمك".
-- لو العميل عايز يرجع منتج، اسأله عن "رقم الطلب" و"سبب الإرجاع" بكل ذوق.
-
-رابعاً: استراتيجية البيع:
-- لو العميل بيسأل عن منتج معين، حاول تقترح عليه منتج تاني يكمل الطقم (Cross-sell) من القائمة المتاحة عندك.
-- لو العميل جديد، رحب بيه وقدم له "أجدد العروض" اللي موجودة في وصف المنتجات.
-
-خامساً: الدفع:
-- لو العميل سأل يدفع إزاي، وضح له إن عندنا دفع عند الاستلام أو تحويل (فودافون كاش / إنستا باي) حسب المتاح في سياسة المتجر.`;
-
-function AISettingsSection() {
-  const [settings, setSettings] = useState<AISettings | null>(null);
-  const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    getAISettings()
-      .then((data) => {
-        setSettings(data);
-        setPrompt(data.ai_system_prompt || DEFAULT_AI_PROMPT);
-        setModel(data.ai_model);
-      })
-      .catch(() => toast.error("فشل تحميل إعدادات الذكاء الاصطناعي"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await updateAISettings({ ai_model: model, ai_system_prompt: prompt });
-      toast.success("تم حفظ إعدادات الذكاء الاصطناعي بنجاح! ✨");
-    } catch {
-      toast.error("فشل حفظ الإعدادات");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) return null;
-
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15">
-            <Sparkles className="h-5 w-5 text-accent" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-white" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>إعدادات الذكاء الاصطناعي</h3>
-            <p className="text-xs text-muted">تحكم في شخصية وأوامر المساعد الآلي</p>
-          </div>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-xs font-bold text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
-          style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
-        >
-          {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          حفظ التغييرات
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <FieldLabel>نموذج الذكاء الاصطناعي (Model)</FieldLabel>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-full rounded-lg border border-border bg-navy px-3 py-2.5 text-sm text-white focus:border-accent focus:outline-none"
-            dir="ltr"
-          >
-            {settings?.available_models.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <FieldLabel>البرومبت المخصص (Custom Instructions)</FieldLabel>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="اكتب هنا التعليمات التي تريد من المساعد اتباعها... مثال: كن مرحاً، قدم خصم 10% للعملاء الجدد، ركز على جودة المنتجات."
-            className="w-full h-40 rounded-lg border border-border bg-navy px-3 py-2.5 text-sm text-white placeholder:text-muted focus:border-accent focus:outline-none resize-none"
-            dir="rtl"
-          />
-          <p className="mt-2 text-[10px] text-muted leading-relaxed">
-            * هذا البرومبت سيتم دمجه مع سياسات العلامة التجارية وسيكون للمساعد رؤية كاملة لآخر 10 منتجات وآخر 3 طلبات للعميل الحالي.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Page ──────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
@@ -705,16 +591,16 @@ export default function IntegrationsPage() {
     <div className="max-w-2xl space-y-6 pb-10" dir="rtl">
       <div>
         <h1 className="text-2xl font-bold text-white" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-          التكاملات والإعدادات
+          التكاملات
         </h1>
         <p className="mt-1 text-sm text-muted" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-          تحكم في ربط المتجر، حساب WhatsApp، وإعدادات المساعد الذكي.
+          تحكم في ربط المتجر وحساب WhatsApp.
         </p>
       </div>
 
-      <AISettingsSection />
       <ShopifySection />
       <WhatsAppSection />
     </div>
   );
 }
+

@@ -15,19 +15,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from fastapi import Body
-from pydantic import BaseModel
 
 from core.auth import get_current_tenant
 from core.database import get_db
 from models.conversation import Conversation
 from models.customer import Customer, CustomerSegment
-from models.order import Order, OrderStatus
+from models.order import Order, OrderStatus, PaymentMethod
 from models.product import Product
 from models.tenant import Tenant
 
@@ -333,3 +333,101 @@ async def list_pending_orders(
         }
         for o in rows.scalars().all()
     ]
+
+
+# ============================================================
+# Customer profile + pending orders (for inbox right panel)
+# ============================================================
+
+@router.get("/customers/{customer_id}/profile")
+async def get_customer_profile(
+    customer_id: int,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    result = await db.execute(
+        select(Customer).where(Customer.id == customer_id, Customer.tenant_id == tenant.id)
+    )
+    c = result.scalar_one_or_none()
+    if not c:
+        raise HTTPException(status_code=404, detail="customer_not_found")
+    return {
+        "id": c.id,
+        "name": c.name,
+        "phone": c.phone,
+        "segment": c.segment.value,
+        "total_orders": c.total_orders,
+        "total_spent": c.total_spent,
+        "last_order_date": c.last_order_date.isoformat() if c.last_order_date else None,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    }
+
+
+@router.get("/customers/{customer_id}/pending-orders")
+async def get_customer_pending_orders(
+    customer_id: int,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        select(Order)
+        .where(
+            Order.tenant_id == tenant.id,
+            Order.customer_id == customer_id,
+            Order.status.in_([
+                OrderStatus.PENDING,
+                OrderStatus.AWAITING_PAYMENT,
+                OrderStatus.AWAITING_RECEIPT,
+            ]),
+        )
+        .order_by(desc(Order.created_at))
+        .limit(5)
+    )
+    return [
+        {
+            "id": o.id,
+            "shopify_order_id": o.shopify_order_id,
+            "shopify_order_number": o.shopify_order_number,
+            "status": o.status.value,
+            "payment_method": o.payment_method.value if o.payment_method else None,
+            "total_price": o.total_price,
+            "currency": o.currency,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+        }
+        for o in rows.scalars().all()
+    ]
+
+
+@router.post("/orders/{order_id}/confirm")
+async def manual_confirm_order(
+    order_id: int,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    """Manually confirm a pending order as COD from the merchant dashboard."""
+    result = await db.execute(
+        select(Order).where(Order.id == order_id, Order.tenant_id == tenant.id)
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="order_not_found")
+    if order.status == OrderStatus.CONFIRMED:
+        return {"id": order.id, "status": order.status.value, "already_confirmed": True}
+
+    order.status = OrderStatus.CONFIRMED
+    order.payment_method = order.payment_method or PaymentMethod.COD
+    order.confirmed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    try:
+        from services.shopify_service import ShopifyService
+        shopify = ShopifyService(tenant)
+        await shopify.tag_order(order.shopify_order_id, "ata-confirmed-manual")
+    except Exception:
+        pass  # best-effort
+
+    return {
+        "id": order.id,
+        "status": order.status.value,
+        "confirmed_at": order.confirmed_at.isoformat(),
+    }

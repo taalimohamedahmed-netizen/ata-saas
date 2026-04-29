@@ -128,6 +128,43 @@ export const getPendingOrders = async (limit = 50, offset = 0): Promise<PendingO
   return res.data;
 };
 
+export interface CustomerProfile {
+  id: number;
+  name: string | null;
+  phone: string;
+  segment: string;
+  total_orders: number;
+  total_spent: number;
+  last_order_date: string | null;
+  created_at: string | null;
+}
+
+export interface CustomerPendingOrder {
+  id: number;
+  shopify_order_id: string;
+  shopify_order_number: string | null;
+  status: string;
+  payment_method: string | null;
+  total_price: number;
+  currency: string;
+  created_at: string | null;
+}
+
+export const getCustomerProfile = async (customerId: number): Promise<CustomerProfile> => {
+  const res = await api.get(`/dashboard/customers/${customerId}/profile`);
+  return res.data;
+};
+
+export const getCustomerPendingOrders = async (customerId: number): Promise<CustomerPendingOrder[]> => {
+  const res = await api.get(`/dashboard/customers/${customerId}/pending-orders`);
+  return res.data;
+};
+
+export const confirmOrder = async (orderId: number): Promise<{ id: number; status: string }> => {
+  const res = await api.post(`/dashboard/orders/${orderId}/confirm`);
+  return res.data;
+};
+
 export const getConversations = async (
   limit = 25,
   offset = 0,

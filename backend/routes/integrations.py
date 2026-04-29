@@ -30,16 +30,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import select, text, delete
+from sqlalchemy.dialects.postgresql import insert as pg_upsert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_tenant
-from core.database import get_db
+from core.database import get_db, _is_sqlite
 from core.encryption import decrypt, encrypt
 from models.customer import Customer
 from models.order import Order, OrderStatus
 from models.tenant import Tenant
-from models.product import Product # Moved to top
+from models.product import Product
 from services.shopify_service import ShopifyService
 from services.whatsapp_service import WhatsAppService
 
@@ -302,36 +303,10 @@ async def shopify_sync(
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_current_tenant),
 ) -> dict[str, Any]:
-    log.info("Starting Shopify sync for tenant_id=%s domain=%s", tenant.id, tenant.shopify_domain)
+    log.info("Starting Shopify sync for tenant_id=%s", tenant.id)
     
     if not tenant.shopify_domain or not tenant.shopify_token:
-        log.warning("Shopify not connected for tenant_id=%s", tenant.id)
         raise HTTPException(status_code=400, detail="Shopify غير متصل")
-
-    # Defensive check: ensure products table exists (helps if migrations skipped it)
-    try:
-        await db.execute(text("SELECT 1 FROM products LIMIT 1"))
-    except Exception:
-        log.warning("Products table seems missing, attempting emergency creation")
-        await db.execute(text("""
-            CREATE TABLE IF NOT EXISTS products (
-                id SERIAL PRIMARY KEY,
-                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                shopify_product_id VARCHAR(60) NOT NULL,
-                title VARCHAR(255) NOT NULL,
-                body_html TEXT,
-                vendor VARCHAR(120),
-                product_type VARCHAR(120),
-                status VARCHAR(40),
-                price FLOAT NOT NULL DEFAULT 0.0,
-                inventory_qty INTEGER NOT NULL DEFAULT 0,
-                image_url VARCHAR(500),
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                CONSTRAINT uq_product_tenant_shopify_id UNIQUE (tenant_id, shopify_product_id)
-            )
-        """))
-        await db.commit()
 
     class _Proxy:
         shopify_domain = tenant.shopify_domain
@@ -340,129 +315,116 @@ async def shopify_sync(
     try:
         svc = ShopifyService(_Proxy())
     except Exception as exc:
-        log.exception("ShopifyService initialization failed")
         raise HTTPException(status_code=400, detail=f"تعذر الاتصال بـ Shopify: {exc}")
 
     # ── Fetch from Shopify ──────────────────────────────────
     try:
-        log.info("Fetching products (limit 50)...")
         shopify_products = await svc.sync_products(max_products=50)
-        log.info("Fetched %s products", len(shopify_products))
-        
-        log.info("Fetching orders (limit 50)...")
         shopify_orders = await svc.sync_orders(max_orders=50)
-        log.info("Fetched %s orders", len(shopify_orders))
-        
-        log.info("Fetching customers (limit 50)...")
         shopify_customers = await svc.sync_customers(max_customers=50)
-        log.info("Fetched %s customers", len(shopify_customers))
     except Exception as exc:
-        log.exception("Shopify API fetch failed")
-        raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify (تأكد من الـ Permissions): {exc}")
+        log.exception("Shopify sync fetch failed")
+        raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
 
-    products_synced = 0
-    customers_synced = 0
-    orders_synced = 0
-
-    # ── Sync Products ───────────────────────────────────────
-    log.info("Upserting products...")
+    # ── Process Products ────────────────────────────────────
+    products_to_upsert = []
     for p in shopify_products:
         sid = str(p.get("id", ""))
         if not sid: continue
-        
-        # Check existing
-        res = await db.execute(select(Product).where(Product.tenant_id == tenant.id, Product.shopify_product_id == sid))
-        product = res.scalar_one_or_none()
-        
-        # Variants logic for price/inventory
         variants = p.get("variants", [])
-        price = float(variants[0].get("price", 0)) if variants else 0.0
-        inventory = sum(v.get("inventory_quantity") or 0 for v in variants)
-        
-        # Handle images
-        images = p.get("images") or []
-        image_url = images[0].get("src") if images else None
-        
-        if not product:
-            product = Product(tenant_id=tenant.id, shopify_product_id=sid)
-            db.add(product)
-            
-        product.title = p.get("title") or "Unknown Product"
-        product.body_html = p.get("body_html")
-        product.vendor = p.get("vendor")
-        product.product_type = p.get("product_type")
-        product.status = p.get("status")
-        product.price = price
-        product.inventory_qty = inventory
-        product.image_url = image_url
-        products_synced += 1
+        products_to_upsert.append({
+            "tenant_id": tenant.id,
+            "shopify_product_id": sid,
+            "title": p.get("title") or "Unknown",
+            "body_html": p.get("body_html"),
+            "vendor": p.get("vendor"),
+            "product_type": p.get("product_type"),
+            "status": p.get("status"),
+            "price": float(variants[0].get("price", 0)) if variants else 0.0,
+            "inventory_qty": sum(v.get("inventory_quantity") or 0 for v in variants),
+            "image_url": (p.get("images") or [{}])[0].get("src"),
+            "updated_at": datetime.now(timezone.utc)
+        })
 
-    await db.flush()
-
-    # ── Sync Customers ──────────────────────────────────────
-    log.info("Upserting customers...")
+    # ── Process Customers ───────────────────────────────────
+    customers_to_upsert = []
     for c in shopify_customers:
         sid = str(c.get("id", ""))
         if not sid: continue
-        
-        # Match by Shopify ID
-        res = await db.execute(select(Customer).where(Customer.tenant_id == tenant.id, Customer.shopify_customer_id == sid))
-        customer = res.scalar_one_or_none()
-        
         phone_raw = (c.get("phone") or "").strip()
-        phone = "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None
-        email = (c.get("email") or "").strip().lower() or None
-        full_name = " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or "Shopify Customer"
+        customers_to_upsert.append({
+            "tenant_id": tenant.id,
+            "shopify_customer_id": sid,
+            "phone": "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None,
+            "email": (c.get("email") or "").strip().lower() or None,
+            "name": " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or "Customer",
+            "total_orders": int(c.get("orders_count") or 0),
+            "total_spent": float(c.get("total_spent") or 0)
+        })
 
-        if not customer:
-            customer = Customer(tenant_id=tenant.id, shopify_customer_id=sid)
-            db.add(customer)
+    # ── Database Write (Fast) ──────────────────────────────
+    try:
+        # 1. Upsert Products
+        if products_to_upsert:
+            stmt = pg_upsert(Product).values(products_to_upsert)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_product_tenant_shopify_id",
+                set_={k: getattr(stmt.excluded, k) for k in products_to_upsert[0].keys() if k not in ["tenant_id", "shopify_product_id"]}
+            )
+            await db.execute(stmt)
+
+        # 2. Upsert Customers
+        if customers_to_upsert:
+            stmt = pg_upsert(Customer).values(customers_to_upsert)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_customer_tenant_shopify_id",
+                set_={k: getattr(stmt.excluded, k) for k in customers_to_upsert[0].keys() if k not in ["tenant_id", "shopify_customer_id"]}
+            )
+            await db.execute(stmt)
             
-        customer.phone = phone
-        customer.email = email
-        customer.name = full_name
-        customer.total_orders = int(c.get("orders_count") or 0)
-        customer.total_spent = float(c.get("total_spent") or 0)
-        customers_synced += 1
+        await db.flush()
 
-    await db.flush()
-
-    # ── Sync Orders ─────────────────────────────────────────
-    log.info("Upserting orders...")
-    for o in shopify_orders:
-        sid = str(o.get("id", ""))
-        if not sid: continue
-        
-        res = await db.execute(select(Order).where(Order.tenant_id == tenant.id, Order.shopify_order_id == sid))
-        order = res.scalar_one_or_none()
-        
-        # Try to link customer
-        customer_sid = str((o.get("customer") or {}).get("id", ""))
-        customer = None
-        if customer_sid:
-            res = await db.execute(select(Customer).where(Customer.tenant_id == tenant.id, Customer.shopify_customer_id == customer_sid))
-            customer = res.scalar_one_or_none()
-
-        if not order:
-            order = Order(tenant_id=tenant.id, shopify_order_id=sid)
-            db.add(order)
+        # 3. Process & Upsert Orders (needs customer_id from DB)
+        # For simplicity in this fast sync, we'll clear and re-sync recent orders 
+        # or just match them if we have time. Let's do batch insert for now.
+        orders_synced = 0
+        for o in shopify_orders:
+            sid = str(o.get("id", ""))
+            if not sid: continue
             
-        order.shopify_order_number = o.get("name") or str(o.get("order_number") or "") or f"#{sid}"
-        order.customer_id = customer.id if customer else None
-        order.total_price = float(o.get("total_price") or 0)
-        order.currency = o.get("currency") or "EGP"
-        orders_synced += 1
+            # Link to customer if exists
+            customer_sid = str((o.get("customer") or {}).get("id", ""))
+            customer_id = None
+            if customer_sid:
+                res = await db.execute(select(Customer.id).where(Customer.tenant_id == tenant.id, Customer.shopify_customer_id == customer_sid))
+                customer_id = res.scalar_one_or_none()
 
-    await db.commit()
-    log.info("Sync complete: products=%s customers=%s orders=%s", products_synced, customers_synced, orders_synced)
-    
-    return {
-        "synced": {
-            "products": products_synced,
-            "customers": customers_synced,
-            "orders": orders_synced
+            stmt = pg_upsert(Order).values({
+                "tenant_id": tenant.id,
+                "shopify_order_id": sid,
+                "shopify_order_number": o.get("name") or str(o.get("order_number") or ""),
+                "customer_id": customer_id,
+                "total_price": float(o.get("total_price") or 0),
+                "currency": o.get("currency") or "EGP",
+                "status": OrderStatus.PENDING
+            }).on_conflict_do_nothing()
+            await db.execute(stmt)
+            orders_synced += 1
+
+        await db.commit()
+        log.info("Fast Sync complete for tenant=%s", tenant.id)
+        
+        return {
+            "synced": {
+                "products": len(products_to_upsert),
+                "customers": len(customers_to_upsert),
+                "orders": orders_synced
+            }
         }
-    }
+    except Exception as exc:
+        await db.rollback()
+        log.exception("Database fast sync failed")
+        raise HTTPException(status_code=500, detail=f"فشل تحديث قاعدة البيانات: {exc}")
 
 
 # ============================================================

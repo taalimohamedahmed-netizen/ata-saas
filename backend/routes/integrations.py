@@ -441,6 +441,50 @@ async def shopify_sync(
 
 
 # ============================================================
+# SHOPIFY — Disconnect
+# ============================================================
+
+@router.post("/shopify/disconnect")
+async def shopify_disconnect(
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, bool]:
+    # Attempt to delete webhooks from Shopify if we still have a token
+    if tenant.shopify_domain and tenant.shopify_token:
+        try:
+            class _Proxy:
+                shopify_domain = tenant.shopify_domain
+                shopify_token = decrypt(tenant.shopify_token)
+            
+            svc = ShopifyService(_Proxy())
+            # List and delete our known webhooks
+            for slug in ["orders", "products", "customers"]:
+                wh_id = getattr(tenant, f"shopify_webhook_{slug}_id")
+                if wh_id:
+                    try:
+                        await svc.delete_webhook(wh_id)
+                    except Exception:
+                        pass # Ignore if already deleted or token invalid
+        except Exception:
+            pass # Continue clearing DB even if Shopify API calls fail
+
+    # Clear all Shopify related fields
+    tenant.shopify_domain = None
+    tenant.shopify_token = None
+    tenant.shopify_client_id = None
+    tenant.shopify_client_secret = None
+    tenant.shopify_webhook_secret = None
+    tenant.shopify_webhook_orders_id = None
+    tenant.shopify_webhook_products_id = None
+    tenant.shopify_webhook_customers_id = None
+    tenant.shopify_connected_at = None
+    
+    await db.commit()
+    log.info("Shopify disconnected for tenant_id=%s", tenant.id)
+    return {"success": True}
+
+
+# ============================================================
 # WHATSAPP — Connect
 # ============================================================
 

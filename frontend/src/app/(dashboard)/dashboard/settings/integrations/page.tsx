@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink } from "lucide-react";
+import { ShoppingBag, MessageCircle, CheckCircle2, XCircle, RefreshCw, Eye, EyeOff, ChevronDown, ChevronUp, Copy, Check, ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks, syncShopify,
+  getShopifyStatus, startShopifyOAuth, retryShopifyWebhooks, syncShopify, disconnectShopify,
   getWhatsAppStatus, connectWhatsApp, verifyWhatsApp,
   type ShopifyStatus, type WhatsAppStatus,
 } from "@/lib/integrations";
@@ -134,6 +134,7 @@ function ShopifySection() {
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     getShopifyStatus().then(setStatus).catch(() => {});
@@ -236,6 +237,23 @@ function ShopifySection() {
     }
   };
 
+  const handleDisconnect = async () => {
+    if (!confirm("هل أنت متأكد من إزالة المتجر؟ سيتم حذف جميع بيانات الربط والـ webhooks.")) return;
+    
+    setDisconnecting(true);
+    try {
+      await disconnectShopify();
+      toast.success("تم إزالة المتجر بنجاح");
+      setStatus(prev => prev ? { ...prev, connected: false, domain: null, webhooks: {}, webhook_urls: {} } : null);
+      // Refresh status from server to be 100% sure
+      getShopifyStatus().then(setStatus).catch(() => {});
+    } catch (err: any) {
+      toast.error("فشل إزالة المتجر");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-border bg-surface p-6 space-y-5">
       {/* Header */}
@@ -249,7 +267,20 @@ function ShopifySection() {
             {status?.domain && <p className="text-xs text-muted">{status.domain}</p>}
           </div>
         </div>
-        <StatusBadge connected={!!status?.connected} />
+        <div className="flex items-center gap-3">
+          {status?.connected && (
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/10 px-2.5 text-xs font-medium text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
+              style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
+            >
+              {disconnecting ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              إزالة المتجر
+            </button>
+          )}
+          <StatusBadge connected={!!status?.connected} />
+        </div>
       </div>
 
       {/* Webhooks status */}
@@ -417,7 +448,7 @@ function WhatsAppSection() {
       {status?.connected && status.webhook_url && (
         <div className="rounded-xl border border-border bg-navy p-4 space-y-3">
           <p className="text-xs font-medium text-muted uppercase tracking-wide mb-3" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-            بيانات الـ Webhook — الصقها في Meta Business Manager
+            بيانات الـ Webhook — الصقها in Meta Business Manager
           </p>
           <div>
             <p className="text-xs text-muted mb-1">Webhook URL</p>

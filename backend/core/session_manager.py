@@ -36,31 +36,40 @@ def _key(tenant_id: int, phone: str) -> str:
 
 
 class SessionManager:
-    """Tenant-isolated session store backed by Redis."""
+    """Tenant-isolated session store backed by Redis (optional)."""
 
     @staticmethod
     async def get(tenant_id: int, phone: str) -> dict[str, Any]:
-        """Return the session dict, or a fresh empty session if missing."""
+        """Return the session dict, or a fresh empty session if missing or Redis is down."""
         client = await get_redis()
-        raw = await client.get(_key(tenant_id, phone))
-        if not raw:
+        if client is None:
             return SessionManager._empty()
+        
         try:
+            raw = await client.get(_key(tenant_id, phone))
+            if not raw:
+                return SessionManager._empty()
             return json.loads(raw)
-        except json.JSONDecodeError:
-            log.warning("Corrupt session for %s/%s; resetting", tenant_id, phone)
+        except Exception as exc:
+            log.warning("Redis get failed for %s/%s: %s", tenant_id, phone, exc)
             return SessionManager._empty()
 
     @staticmethod
     async def set(tenant_id: int, phone: str, session: dict[str, Any]) -> None:
         """Persist the full session, refreshing the TTL."""
-        session["updated_at"] = datetime.now(timezone.utc).isoformat()
         client = await get_redis()
-        await client.set(
-            _key(tenant_id, phone),
-            json.dumps(session, default=str),
-            ex=SESSION_TTL,
-        )
+        if client is None:
+            return
+
+        session["updated_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            await client.set(
+                _key(tenant_id, phone),
+                json.dumps(session, default=str),
+                ex=SESSION_TTL,
+            )
+        except Exception as exc:
+            log.warning("Redis set failed for %s/%s: %s", tenant_id, phone, exc)
 
     @staticmethod
     async def update(
@@ -99,7 +108,11 @@ class SessionManager:
     async def clear(tenant_id: int, phone: str) -> None:
         """Delete the session entirely (e.g. after order confirmed)."""
         client = await get_redis()
-        await client.delete(_key(tenant_id, phone))
+        if client:
+            try:
+                await client.delete(_key(tenant_id, phone))
+            except Exception:
+                pass
 
     @staticmethod
     async def set_flow(

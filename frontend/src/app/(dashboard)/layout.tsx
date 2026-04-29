@@ -31,21 +31,30 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { isAuthenticated, tenantName, logout } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    // Wait for Zustand to finish hydration
+    const checkHydration = () => {
+      if (useAuthStore.persist.hasHydrated()) {
+        setHydrated(true);
+      } else {
+        setTimeout(checkHydration, 50);
+      }
+    };
+    checkHydration();
   }, []);
 
   useEffect(() => {
-    // Client-side auth guard
-    // Only redirect if we have hydrated (mounted) and are still not authenticated
-    if (mounted && !isAuthenticated) {
+    // Only redirect if we have hydrated AND mounted, and still not authenticated
+    if (mounted && hydrated && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isAuthenticated, router, mounted]);
+  }, [isAuthenticated, router, mounted, hydrated]);
 
   // Prevent flash of login or empty state during hydration
-  if (!mounted || !isAuthenticated) {
+  if (!mounted || !hydrated || !isAuthenticated) {
     return (
       <div className="flex h-screen items-center justify-center bg-navy">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />

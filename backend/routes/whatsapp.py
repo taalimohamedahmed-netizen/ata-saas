@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -29,6 +29,10 @@ from services.whatsapp_service import WhatsAppService
 
 log = logging.getLogger("ata.routes.whatsapp")
 router = APIRouter()
+
+# Cap the persisted history per conversation. Inbox UI needs enough to render
+# the chat thread even when Redis is unavailable.
+HISTORY_TAIL_LIMIT = 50
 
 
 # ============================================================
@@ -107,26 +111,35 @@ async def whatsapp_webhook(
 # ============================================================
 async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession) -> None:
     phone = msg.get("from")
-    if not phone: return
+    if not phone:
+        log.warning("Inbound message has no 'from' field — skipping")
+        return
 
     msg_type = msg.get("type", "text")
     text_content, meta = _extract_text_and_meta(msg, msg_type)
-    log.info("Processing %s from %s: %s", msg_type, phone, text_content[:50])
+    log.info("Processing %s from %s for tenant=%s: %s", msg_type, phone, tenant.id, text_content[:50])
 
     # 1. Ensure customer exists
     customer = await _upsert_customer(db, tenant.id, phone)
+    log.info("Customer resolved: id=%s phone=%s", customer.id, customer.phone)
 
-    # 2. Record incoming message immediately (safety)
-    await SessionManager.append_history(tenant.id, phone, "user", text_content or f"[{msg_type}]")
+    user_message_text = text_content or f"[{msg_type}]"
+
+    # 2. Persist the user's message in the DB conversation context immediately.
+    #    This guarantees the message shows up in the inbox even if Redis is down
+    #    or AI processing later fails.
+    await SessionManager.append_history(tenant.id, phone, "user", user_message_text)
     session = await SessionManager.get(tenant.id, phone)
-    
-    # Save initial conversation record so it shows up in inbox even if AI fails
-    await _record_conversation(db, tenant.id, customer.id, session, Intent.BRAND_QUERY)
+    await _record_conversation(
+        db, tenant.id, customer.id, session,
+        Intent.GENERAL,
+        new_message={"role": "user", "content": user_message_text},
+    )
 
     # 3. Classification & Dispatch
     reply = "عذراً، حدث خطأ ما. يرجى المحاولة لاحقاً."
-    intent = Intent.BRAND_QUERY
-    
+    intent = Intent.GENERAL
+
     try:
         ai = AIService()
         classifier = IntentClassifier(ai_service=ai)
@@ -144,22 +157,27 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
             reply = await RevenueHandler(ai_service=ai).handle(tenant, customer, text_content or "", intent, session)
         else:
             reply = await BrandHandler(ai_service=ai).handle(tenant, customer, text_content or "", session)
-    except Exception as exc:
-        log.exception("AI Processing failed")
-        # Keep default error reply
+    except Exception:
+        log.exception("AI Processing failed — using default error reply")
 
     # 4. Send reply
+    send_ok = False
     try:
         wa = WhatsAppService(tenant)
         await wa.send_text(to=phone, body=reply)
-        await SessionManager.append_history(tenant.id, phone, "assistant", reply)
-        # Refresh session to get assistant message in record
-        session = await SessionManager.get(tenant.id, phone)
+        send_ok = True
     except Exception:
         log.exception("Failed to send WhatsApp reply")
 
-    # 5. Finalize conversation record
-    await _record_conversation(db, tenant.id, customer.id, session, intent)
+    if send_ok:
+        await SessionManager.append_history(tenant.id, phone, "assistant", reply)
+        session = await SessionManager.get(tenant.id, phone)
+
+    # 5. Finalize conversation record — persist the assistant reply in DB too.
+    await _record_conversation(
+        db, tenant.id, customer.id, session, intent,
+        new_message={"role": "assistant", "content": reply} if send_ok else None,
+    )
 
 
 def _extract_text_and_meta(msg: dict[str, Any], msg_type: str) -> tuple[str, dict[str, Any]]:
@@ -192,55 +210,106 @@ async def _upsert_customer(db: AsyncSession, tenant_id: int, phone: str) -> Cust
 
 
 async def _record_conversation(
-    db: AsyncSession, tenant_id: int, customer_id: int, session: dict[str, Any], intent: Intent
+    db: AsyncSession,
+    tenant_id: int,
+    customer_id: int,
+    session: dict[str, Any],
+    intent: Intent,
+    new_message: dict[str, str] | None = None,
 ) -> None:
-    # Check if conversation table exists
-    try:
-        await db.execute(text("SELECT 1 FROM conversations LIMIT 1"))
-    except Exception:
-        log.warning("Conversations table missing, creating...")
-        await db.execute(text("""
-            CREATE TABLE IF NOT EXISTS conversations (
-                id SERIAL PRIMARY KEY,
-                tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-                customer_id INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-                platform VARCHAR(20) NOT NULL,
-                current_flow VARCHAR(50),
-                current_step VARCHAR(50),
-                context JSONB,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-        """))
-        await db.commit()
+    """
+    Persist the conversation snapshot to the DB.
 
-    result = await db.execute(
-        select(Conversation).where(
-            Conversation.tenant_id == tenant_id,
-            Conversation.customer_id == customer_id
+    History is the union of:
+      - what's already stored in `conversations.context.history_tail` (DB-truth)
+      - what's in Redis session (if available)
+      - the new_message just observed (if provided)
+
+    This guarantees the inbox shows the full chat thread even when Redis is down.
+    """
+    # Look up existing conversation (and its persisted history) first
+    try:
+        result = await db.execute(
+            select(Conversation)
+            .where(
+                Conversation.tenant_id == tenant_id,
+                Conversation.customer_id == customer_id,
+            )
+            .order_by(Conversation.updated_at.desc())
+            .limit(1)
         )
-    )
-    convo = result.scalar_one_or_none()
-    
+        convo = result.scalar_one_or_none()
+    except Exception:
+        log.exception("Failed to query conversations table for tenant=%s customer=%s", tenant_id, customer_id)
+        await db.rollback()
+        convo = None
+
+    # ── Merge histories ─────────────────────────────────────────────
+    persisted_history: list[dict[str, Any]] = []
+    if convo and isinstance(convo.context, dict):
+        existing_tail = convo.context.get("history_tail") or []
+        if isinstance(existing_tail, list):
+            persisted_history = [m for m in existing_tail if isinstance(m, dict)]
+
+    redis_history = session.get("history") or []
+    if not isinstance(redis_history, list):
+        redis_history = []
+
+    # Use the longer source of history as the base.
+    base_history = redis_history if len(redis_history) > len(persisted_history) else persisted_history
+
+    history: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for m in base_history:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role", ""))
+        content = str(m.get("content", ""))
+        key = (role, content)
+        if not role or not content or key in seen:
+            continue
+        seen.add(key)
+        history.append({"role": role, "content": content, "ts": m.get("ts")})
+
+    # Append the brand-new message (avoid exact duplicate of last entry)
+    if new_message:
+        nm_role = str(new_message.get("role", ""))
+        nm_content = str(new_message.get("content", ""))
+        if nm_role and nm_content:
+            last = history[-1] if history else None
+            if not last or last.get("role") != nm_role or last.get("content") != nm_content:
+                history.append({
+                    "role": nm_role,
+                    "content": nm_content,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                })
+
+    history = history[-HISTORY_TAIL_LIMIT:]
+
     snapshot = {
-        "last_intent": intent.value if hasattr(intent, 'value') else str(intent),
-        "history_tail": session.get("history", [])[-10:], # Keep more history
+        "last_intent": intent.value if hasattr(intent, "value") else str(intent),
+        "history_tail": history,
     }
-    
-    if convo is None:
-        convo = Conversation(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            platform=Platform.WHATSAPP,
-            current_flow=session.get("current_flow"),
-            current_step=session.get("current_step"),
-            context=snapshot,
-        )
-        db.add(convo)
-    else:
-        convo.current_flow = session.get("current_flow")
-        convo.current_step = session.get("current_step")
-        convo.context = snapshot
-        convo.updated_at = datetime.now(timezone.utc)
-        
-    await db.commit()
+
+    try:
+        if convo is None:
+            convo = Conversation(
+                tenant_id=tenant_id,
+                customer_id=customer_id,
+                platform=Platform.WHATSAPP,
+                current_flow=session.get("current_flow"),
+                current_step=session.get("current_step"),
+                context=snapshot,
+            )
+            db.add(convo)
+            log.info("Created new conversation tenant=%s customer=%s", tenant_id, customer_id)
+        else:
+            convo.current_flow = session.get("current_flow") or convo.current_flow
+            convo.current_step = session.get("current_step") or convo.current_step
+            convo.context = snapshot
+            convo.updated_at = datetime.now(timezone.utc)
+
+        await db.commit()
+    except Exception:
+        log.exception("Failed to persist conversation for tenant=%s customer=%s", tenant_id, customer_id)
+        await db.rollback()

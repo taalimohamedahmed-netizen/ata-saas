@@ -319,20 +319,25 @@ async def shopify_sync(
 
     # ── Fetch from Shopify ──────────────────────────────────
     try:
-        shopify_products = await svc.sync_products(max_products=50)
-        shopify_orders = await svc.sync_orders(max_orders=50)
-        shopify_customers = await svc.sync_customers(max_customers=50)
+        shopify_products = await svc.sync_products(max_products=250)
+        shopify_orders = await svc.sync_orders(max_orders=250)
+        shopify_customers = await svc.sync_customers(max_customers=250)
+        log.info(
+            "Shopify fetched: products=%d orders=%d customers=%d",
+            len(shopify_products), len(shopify_orders), len(shopify_customers),
+        )
     except Exception as exc:
         log.exception("Shopify sync fetch failed")
         raise HTTPException(status_code=502, detail=f"فشل جلب البيانات من Shopify: {exc}")
 
     # ── Process Products ────────────────────────────────────
-    products_to_upsert = []
+    products_by_sid: dict[str, dict[str, Any]] = {}
     for p in shopify_products:
-        sid = str(p.get("id", ""))
-        if not sid: continue
-        variants = p.get("variants", [])
-        products_to_upsert.append({
+        sid = str(p.get("id") or "")
+        if not sid:
+            continue
+        variants = p.get("variants") or []
+        products_by_sid[sid] = {
             "tenant_id": tenant.id,
             "shopify_product_id": sid,
             "title": p.get("title") or "Unknown",
@@ -340,27 +345,30 @@ async def shopify_sync(
             "vendor": p.get("vendor"),
             "product_type": p.get("product_type"),
             "status": p.get("status"),
-            "price": float(variants[0].get("price", 0)) if variants else 0.0,
-            "inventory_qty": sum(v.get("inventory_quantity") or 0 for v in variants),
-            "image_url": (p.get("images") or [{}])[0].get("src"),
-            "updated_at": datetime.now(timezone.utc)
-        })
+            "price": float((variants[0] or {}).get("price") or 0) if variants else 0.0,
+            "inventory_qty": sum((v.get("inventory_quantity") or 0) for v in variants),
+            "image_url": ((p.get("images") or [{}])[0] or {}).get("src"),
+            "updated_at": datetime.now(timezone.utc),
+        }
+    products_to_upsert = list(products_by_sid.values())
 
     # ── Process Customers ───────────────────────────────────
-    customers_to_upsert = []
+    customers_by_sid: dict[str, dict[str, Any]] = {}
     for c in shopify_customers:
-        sid = str(c.get("id", ""))
-        if not sid: continue
+        sid = str(c.get("id") or "")
+        if not sid:
+            continue
         phone_raw = (c.get("phone") or "").strip()
-        customers_to_upsert.append({
+        customers_by_sid[sid] = {
             "tenant_id": tenant.id,
             "shopify_customer_id": sid,
             "phone": "".join(ch for ch in phone_raw if ch.isdigit()) if phone_raw else None,
             "email": (c.get("email") or "").strip().lower() or None,
             "name": " ".join(p for p in [c.get("first_name"), c.get("last_name")] if p).strip() or "Customer",
             "total_orders": int(c.get("orders_count") or 0),
-            "total_spent": float(c.get("total_spent") or 0)
-        })
+            "total_spent": float(c.get("total_spent") or 0),
+        }
+    customers_to_upsert = list(customers_by_sid.values())
 
     # ── Database Write (Fast) ──────────────────────────────
     try:
@@ -406,7 +414,7 @@ async def shopify_sync(
                 "customer_id": customer_id,
                 "total_price": float(o.get("total_price") or 0),
                 "currency": o.get("currency") or "EGP",
-                "status": OrderStatus.PENDING
+                "status": OrderStatus.PENDING.value,
             }).on_conflict_do_nothing()
             await db.execute(stmt)
             orders_synced += 1

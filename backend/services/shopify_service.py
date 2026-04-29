@@ -174,6 +174,21 @@ class ShopifyService:
             products.extend(batch)
         return products[:max_products]
 
+    async def sync_customers(self, max_customers: int = 500) -> list[dict[str, Any]]:
+        """Fetch customers for historical sync using since_id pagination."""
+        per_page = 250
+        params: dict[str, Any] = {"limit": per_page}
+        data = await self._request("GET", "/customers.json", params=params)
+        customers: list[dict[str, Any]] = data.get("customers", [])
+        while len(customers) < max_customers and customers and len(customers) % per_page == 0:
+            params["since_id"] = customers[-1]["id"]
+            data = await self._request("GET", "/customers.json", params=params)
+            batch = data.get("customers", [])
+            if not batch:
+                break
+            customers.extend(batch)
+        return customers[:max_customers]
+
     # ----------------------------------------------------------------
     # Products (used by RevenueHandler for upsells)
     # ----------------------------------------------------------------

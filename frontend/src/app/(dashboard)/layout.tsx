@@ -15,6 +15,7 @@ import {
   Package,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
+import { SetupChatWidget } from "@/components/setup-agent/chat-widget";
 
 const navItems = [
   { icon: LayoutDashboard, label: "لوحة التحكم", href: "/dashboard" },
@@ -132,6 +133,8 @@ export default function DashboardLayout({
 
       {/* ═══════ MAIN ═══════ */}
       <main className="flex-1 overflow-y-auto">{children}</main>
+
+      <SetupChatWidget />
     </div>
   );
 }

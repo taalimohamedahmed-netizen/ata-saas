@@ -398,6 +398,26 @@ async def get_customer_pending_orders(
     ]
 
 
+# ============================================================
+# Setup Agent
+# ============================================================
+
+class AgentChatIn(BaseModel):
+    message: str
+    history: list[dict] = []
+
+
+@router.post("/agent/chat")
+async def agent_chat(
+    payload: AgentChatIn,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    from services.setup_agent_service import SetupAgentService
+    service = SetupAgentService(db, tenant)
+    return await service.chat(payload.message, payload.history)
+
+
 @router.post("/orders/{order_id}/confirm")
 async def manual_confirm_order(
     order_id: int,

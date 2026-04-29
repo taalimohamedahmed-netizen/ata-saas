@@ -17,7 +17,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from fastapi import Body
+from pydantic import BaseModel
 
 from core.auth import get_current_tenant
 from core.database import get_db
@@ -237,4 +241,95 @@ async def list_conversations(
             "updated_at": c.updated_at.isoformat() if c.updated_at else None,
         }
         for c in rows
+    ]
+
+
+# ============================================================
+# Order Confirmation — payment settings + pending orders
+# ============================================================
+
+class PaymentSettingsIn(BaseModel):
+    instapay_number: str | None = None
+    instapay_link: str | None = None
+    vodafone_number: str | None = None
+    vodafone_link: str | None = None
+
+
+@router.get("/order-confirmation/settings")
+async def get_payment_settings(
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    return {
+        "instapay_number": tenant.instapay_number,
+        "instapay_link": tenant.instapay_link,
+        "vodafone_number": tenant.vodafone_number,
+        "vodafone_link": tenant.vodafone_link,
+    }
+
+
+@router.post("/order-confirmation/settings")
+async def save_payment_settings(
+    payload: PaymentSettingsIn,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> dict[str, Any]:
+    if payload.instapay_number is not None:
+        tenant.instapay_number = payload.instapay_number.strip() or None
+    if payload.instapay_link is not None:
+        tenant.instapay_link = payload.instapay_link.strip() or None
+    if payload.vodafone_number is not None:
+        tenant.vodafone_number = payload.vodafone_number.strip() or None
+    if payload.vodafone_link is not None:
+        tenant.vodafone_link = payload.vodafone_link.strip() or None
+    await db.commit()
+    return {
+        "instapay_number": tenant.instapay_number,
+        "instapay_link": tenant.instapay_link,
+        "vodafone_number": tenant.vodafone_number,
+        "vodafone_link": tenant.vodafone_link,
+    }
+
+
+@router.get("/order-confirmation/pending")
+async def list_pending_orders(
+    limit: int = Query(default=50, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> list[dict[str, Any]]:
+    """Orders waiting for payment confirmation (PENDING or AWAITING_PAYMENT/RECEIPT)."""
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(Order)
+        .options(selectinload(Order.customer))
+        .where(
+            Order.tenant_id == tenant.id,
+            Order.status.in_([
+                OrderStatus.PENDING,
+                OrderStatus.AWAITING_PAYMENT,
+                OrderStatus.AWAITING_RECEIPT,
+            ]),
+        )
+        .order_by(desc(Order.created_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    rows = await db.execute(stmt)
+    return [
+        {
+            "id": o.id,
+            "shopify_order_id": o.shopify_order_id,
+            "shopify_order_number": o.shopify_order_number,
+            "status": o.status.value,
+            "payment_method": o.payment_method.value if o.payment_method else None,
+            "total_price": o.total_price,
+            "currency": o.currency,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "customer": {
+                "id": o.customer.id,
+                "name": o.customer.name,
+                "phone": o.customer.phone,
+            } if o.customer else None,
+        }
+        for o in rows.scalars().all()
     ]

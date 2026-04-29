@@ -168,10 +168,14 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
         log.info("Classified intent: %s", intent)
 
         if intent == Intent.ORDER_CONFIRM or session.get("current_flow") == "ORDER_CONFIRM":
-            reply = await OrderHandler(ai_service=ai).handle(
+            result = await OrderHandler(ai_service=ai).handle(
                 tenant=tenant, customer=customer, message=text_content or "",
                 message_meta=meta, session=session, db=db,
             )
+            if result is None:
+                # Handler sent an interactive (buttons) message directly — skip text reply
+                return
+            reply = result
         elif intent in (Intent.WISMO, Intent.RETURN_REQUEST):
             reply = await SupportHandler(ai_service=ai).handle(tenant, customer, text_content or "", intent, session)
         elif intent in (Intent.UPSELL, Intent.ABANDONED_CART):

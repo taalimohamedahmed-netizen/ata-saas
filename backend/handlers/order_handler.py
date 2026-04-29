@@ -16,7 +16,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.session_manager import SessionManager
@@ -117,9 +117,11 @@ class OrderHandler:
         message_meta: dict[str, Any],
         session: dict[str, Any],
         db: AsyncSession,
-    ) -> str:
+    ) -> str | None:
         """
         Drive the conversation forward by one step.
+        Returns None when an interactive (buttons) message was already sent
+        directly via WhatsApp — caller should skip sending a text reply.
 
         `message_meta` carries non-text payloads from the WhatsApp router:
           - {"type": "button",  "button_id": "pay_instapay"}
@@ -128,43 +130,38 @@ class OrderHandler:
         """
         ctx = session.get("context", {}) or {}
         order_id = ctx.get("order_id")
+        step = session.get("current_step") or "AWAIT_PAYMENT_METHOD"
+
         order = await self._load_order(db, tenant.id, order_id) if order_id else None
 
-        step = session.get("current_step") or "AWAIT_PAYMENT_METHOD"
+        # ── Customer-initiated: no order in session ─────────────────
+        if order is None and step != "DONE":
+            order = await self._find_pending_order(db, tenant.id, customer.id)
+            if order is None:
+                await SessionManager.clear(tenant.id, customer.phone)
+                return "مش لاقيش أوردر معلق ليك. لو عندك مشكلة تانية كلمني وهساعدك. 🙏"
+            # Restart the flow from scratch with the found order
+            await self.start_from_shopify_order(tenant, order, customer, {}, db)
+            return None  # interactive buttons already sent
 
         # Step A: pick a payment method (button reply or text)
         if step == "AWAIT_PAYMENT_METHOD":
             method = self._extract_method(message, message_meta)
             if method is None:
-                return (
-                    "اختار من الأزرار: الدفع عند الاستلام / إنستا باي / "
-                    "فودافون كاش."
-                )
-            return await self._on_method_chosen(
-                tenant, customer, order, method, db
-            )
+                return "اختار من الأزرار: الدفع عند الاستلام / إنستا باي / فودافون كاش."
+            return await self._on_method_chosen(tenant, customer, order, method, db)
 
         # Step B: waiting for the receipt image
         if step == "AWAIT_RECEIPT":
             if message_meta.get("type") != "image":
-                return (
-                    "محتاج صورة الإيصال من فضلك. ابعتها هنا في الشات."
-                )
-            return await self._verify_receipt(
-                tenant, customer, order, message_meta, db
-            )
+                return "محتاج صورة الإيصال من فضلك. ابعتها هنا في الشات. 📸"
+            return await self._verify_receipt(tenant, customer, order, message_meta, db)
 
         # Step C: already confirmed
         if step == "DONE":
-            return (
-                "طلبك مأكد بالفعل! ✅ هتلاقي تفاصيل الشحن بتوصلك قريباً."
-            )
+            return "طلبك مأكد بالفعل! ✅ هتلاقي تفاصيل الشحن بتوصلك قريباً."
 
-        # Unknown step
-        log.warning(
-            "OrderHandler reached unknown step=%s tenant=%s customer=%s",
-            step, tenant.id, customer.id,
-        )
+        log.warning("OrderHandler unknown step=%s tenant=%s customer=%s", step, tenant.id, customer.id)
         await SessionManager.clear(tenant.id, customer.phone)
         return "ممكن نبدأ من جديد؟ ابعت 'مرحبا' عشان نبدأ."
 
@@ -217,6 +214,7 @@ class OrderHandler:
                 await shopify.update_order_note(
                     order.shopify_order_id, "ATA: confirmed (COD via WhatsApp)"
                 )
+                await shopify.tag_order(order.shopify_order_id, "ata-cod-confirmed")
             except Exception:
                 log.warning("Could not annotate Shopify order (COD)")
             return payments.payment_instructions(method, order.total_price)
@@ -293,6 +291,7 @@ class OrderHandler:
                 order.shopify_order_id,
                 f"ATA: payment verified ({order.payment_method.value})",
             )
+            await shopify.tag_order(order.shopify_order_id, "ata-payment-verified")
         except Exception:
             log.exception("Shopify confirmation failed (still saved locally)")
 
@@ -313,13 +312,23 @@ class OrderHandler:
     async def _load_order(
         db: AsyncSession, tenant_id: int, order_id: int | None
     ) -> Order | None:
-        """Always filter by tenant_id when loading an order."""
         if not order_id:
             return None
         result = await db.execute(
+            select(Order).where(Order.id == order_id, Order.tenant_id == tenant_id)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def _find_pending_order(
+        db: AsyncSession, tenant_id: int, customer_id: int
+    ) -> Order | None:
+        """Find the most recent PENDING or AWAITING_PAYMENT order for this customer."""
+        result = await db.execute(
             select(Order).where(
-                Order.id == order_id,
                 Order.tenant_id == tenant_id,
-            )
+                Order.customer_id == customer_id,
+                Order.status.in_([OrderStatus.PENDING, OrderStatus.AWAITING_PAYMENT]),
+            ).order_by(desc(Order.created_at)).limit(1)
         )
         return result.scalar_one_or_none()

@@ -50,29 +50,30 @@ class PaymentService:
         method: PaymentMethod,
         amount: float,
     ) -> str:
-        """Build a bilingual instructions message for the customer."""
+        """Build a payment instructions message for the customer."""
         if method == PaymentMethod.COD:
-            return (
-                "تم اختيار الدفع عند الاستلام. هنشحن طلبك في أقرب وقت."
-            )
+            return "✅ تم اختيار الدفع عند الاستلام. هنشحن طلبك في أقرب وقت!"
 
         recipient = self.get_recipient(method)
         if not recipient:
-            return (
-                "آسف، طريقة الدفع دي مش متاحة حالياً. "
-                "تحب تختار طريقة تانية؟"
-            )
+            return "آسف، طريقة الدفع دي مش متاحة حالياً. تحب تختار طريقة تانية؟"
 
         if method == PaymentMethod.INSTAPAY:
             method_name_ar = "إنستا باي"
+            link = getattr(self.tenant, "instapay_link", None)
         else:
             method_name_ar = "فودافون كاش"
+            link = getattr(self.tenant, "vodafone_link", None)
 
-        return (
-            f"تمام! من فضلك حوّل {amount:.2f} جنيه على {method_name_ar} "
-            f"على الرقم: {recipient}\n\n"
-            f"بعد التحويل، ابعت صورة الإيصال هنا عشان نأكد طلبك."
+        msg = (
+            f"تمام! 💳\n"
+            f"حوّل *{amount:.2f} جنيه* على {method_name_ar}\n"
+            f"على الرقم: *{recipient}*\n"
         )
+        if link:
+            msg += f"\n🔗 رابط الدفع:\n{link}\n"
+        msg += "\nبعد التحويل، ابعت صورة الإيصال هنا. 📸"
+        return msg
 
     # ----------------------------------------------------------------
     # AI-backed receipt verification

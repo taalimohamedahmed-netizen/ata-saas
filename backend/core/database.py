@@ -213,6 +213,10 @@ async def _run_column_migrations() -> None:
 
         # AI pause flag per conversation (manual takeover)
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN NOT NULL DEFAULT FALSE",
+
+        # Payment links (merchant-configured URLs sent to customer after they pick a method)
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS instapay_link VARCHAR(500)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS vodafone_link VARCHAR(500)",
     ]
     async with engine.begin() as conn:
         for sql in migrations:

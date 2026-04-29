@@ -128,6 +128,16 @@ class ShopifyService:
         )
         return data.get("transaction", {})
 
+    async def tag_order(self, order_id: str | int, tag: str) -> None:
+        """Append a tag to a Shopify order (non-destructive — preserves existing tags)."""
+        data = await self._request("GET", f"/orders/{order_id}.json", params={"fields": "tags"})
+        current = data.get("order", {}).get("tags", "") or ""
+        tags = [t.strip() for t in current.split(",") if t.strip()]
+        if tag not in tags:
+            tags.append(tag)
+            body = {"order": {"id": int(order_id), "tags": ", ".join(tags)}}
+            await self._request("PUT", f"/orders/{order_id}.json", json_body=body)
+
     async def cancel_order(
         self,
         order_id: str | int,

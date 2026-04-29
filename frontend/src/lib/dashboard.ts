@@ -94,6 +94,40 @@ export const getProducts = async (
   return res.data;
 };
 
+export interface PaymentSettings {
+  instapay_number: string | null;
+  instapay_link: string | null;
+  vodafone_number: string | null;
+  vodafone_link: string | null;
+}
+
+export interface PendingOrder {
+  id: number;
+  shopify_order_id: string;
+  shopify_order_number: string | null;
+  status: string;
+  payment_method: string | null;
+  total_price: number;
+  currency: string;
+  created_at: string | null;
+  customer: { id: number; name: string | null; phone: string } | null;
+}
+
+export const getPaymentSettings = async (): Promise<PaymentSettings> => {
+  const res = await api.get("/dashboard/order-confirmation/settings");
+  return res.data;
+};
+
+export const savePaymentSettings = async (data: Partial<PaymentSettings>): Promise<PaymentSettings> => {
+  const res = await api.post("/dashboard/order-confirmation/settings", data);
+  return res.data;
+};
+
+export const getPendingOrders = async (limit = 50, offset = 0): Promise<PendingOrder[]> => {
+  const res = await api.get("/dashboard/order-confirmation/pending", { params: { limit, offset } });
+  return res.data;
+};
+
 export const getConversations = async (
   limit = 25,
   offset = 0,

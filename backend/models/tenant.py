@@ -68,7 +68,9 @@ class Tenant(Base):
 
     # ----- Egyptian payments -----
     instapay_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    instapay_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     vodafone_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    vodafone_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # ----- AI provider (optional OpenRouter override) -----
     openrouter_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)  # encrypted

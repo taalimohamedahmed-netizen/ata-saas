@@ -65,10 +65,9 @@ export default function DashboardLayout({
             const base = "flex h-10 w-10 items-center justify-center rounded-lg transition-colors lg:w-full lg:gap-3 lg:px-3 lg:justify-start";
             const active = "bg-accent/15 text-accent";
             const inactive = "text-muted hover:bg-white/5 hover:text-white";
-            const disabled = "opacity-40 cursor-not-allowed pointer-events-none";
-            const cls = `${base} ${item.disabled ? disabled : isActive ? active : inactive}`;
+            const cls = `${base} ${isActive ? active : inactive}`;
             return (
-              <Link key={item.label} href={item.disabled ? "#" : item.href} className={cls} title={item.label} aria-disabled={item.disabled}>
+              <Link key={item.label} href={item.href} className={cls} title={item.label}>
                 <item.icon className="h-5 w-5 shrink-0" />
                 <span className="hidden lg:block text-sm" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
                   {item.label}

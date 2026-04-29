@@ -176,6 +176,9 @@ async def _run_column_migrations() -> None:
             IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_customer_tenant_shopify_id') THEN
                 ALTER TABLE customers ADD CONSTRAINT uq_customer_tenant_shopify_id UNIQUE (tenant_id, shopify_customer_id);
             END IF;
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_customer_tenant_phone') THEN
+                ALTER TABLE customers DROP CONSTRAINT uq_customer_tenant_phone;
+            END IF;
         END $$;
         """,
         

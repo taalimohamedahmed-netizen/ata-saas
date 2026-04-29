@@ -201,6 +201,9 @@ async def _run_column_migrations() -> None:
         "CREATE INDEX IF NOT EXISTS idx_products_tenant_id ON products(tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_products_shopify_product_id ON products(shopify_product_id)",
 
+        # Product handle for building storefront URLs
+        "ALTER TABLE products ADD COLUMN IF NOT EXISTS handle VARCHAR(255)",
+
         # AI provider per tenant (OpenRouter support)
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS openrouter_api_key TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ai_model VARCHAR(120)",

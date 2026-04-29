@@ -38,6 +38,7 @@ class Product(Base):
 
     shopify_product_id: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
+    handle: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Shopify URL slug
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     vendor: Mapped[str | None] = mapped_column(String(120), nullable=True)
     product_type: Mapped[str | None] = mapped_column(String(120), nullable=True)

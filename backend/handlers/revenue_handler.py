@@ -48,11 +48,16 @@ class RevenueHandler:
                 shopify = ShopifyService(tenant)
                 products = await shopify.list_products(limit=5)
                 lines = []
+                shop_domain = tenant.shopify_domain
                 for p in products:
                     title = p.get("title", "Product")
+                    handle = p.get("handle", "")
                     variants = p.get("variants") or []
                     price = variants[0].get("price") if variants else "?"
-                    lines.append(f"- {title} ({price} EGP)")
+                    line = f"- {title} ({price} EGP)"
+                    if shop_domain and handle:
+                        line += f" | Link: https://{shop_domain}/products/{handle}"
+                    lines.append(line)
                 if lines:
                     product_block = "Available products:\n" + "\n".join(lines)
             except Exception:

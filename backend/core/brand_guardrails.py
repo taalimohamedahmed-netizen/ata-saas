@@ -78,6 +78,9 @@ def build_system_prompt(tenant) -> str:
         f"- Keep replies short (≤ 3 sentences) unless the customer asks for "
         f"more detail.\n"
         f"- Always be respectful, even if the customer is rude.\n"
+        f"- When recommending a product, always include its direct link "
+        f"(from the 'Link:' field in the AVAILABLE PRODUCTS list) so the "
+        f"customer can view it directly.\n"
     )
     return prompt
 

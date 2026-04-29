@@ -341,6 +341,7 @@ async def shopify_sync(
             "tenant_id": tenant.id,
             "shopify_product_id": sid,
             "title": p.get("title") or "Unknown",
+            "handle": p.get("handle"),
             "body_html": p.get("body_html"),
             "vendor": p.get("vendor"),
             "product_type": p.get("product_type"),

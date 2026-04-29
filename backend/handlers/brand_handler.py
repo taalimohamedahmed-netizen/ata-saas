@@ -44,9 +44,13 @@ class BrandHandler:
             )
             products = res.scalars().all()
             if products:
+                shop_domain = getattr(tenant, "shopify_domain", None)
                 extra_context += "\n=== AVAILABLE PRODUCTS ===\n"
                 for p in products:
-                    extra_context += f"- {p.title}: {p.price} EGP (Stock: {p.inventory_qty})\n"
+                    line = f"- {p.title}: {p.price} EGP (Stock: {p.inventory_qty})"
+                    if shop_domain and p.handle:
+                        line += f" | Link: https://{shop_domain}/products/{p.handle}"
+                    extra_context += line + "\n"
 
             # 2. Fetch customer's recent orders
             res = await db.execute(

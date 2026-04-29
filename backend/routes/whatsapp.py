@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -23,6 +24,7 @@ from handlers.revenue_handler import RevenueHandler
 from handlers.support_handler import SupportHandler
 from models.conversation import Conversation, Platform
 from models.customer import Customer
+from models.order import Order, OrderStatus
 from models.tenant import Tenant
 from services.ai_service import AIService
 from services.whatsapp_service import WhatsAppService
@@ -164,7 +166,13 @@ async def _process_message(tenant: Tenant, msg: dict[str, Any], db: AsyncSession
     try:
         ai = AIService(tenant=tenant)
         classifier = IntentClassifier(ai_service=ai)
-        intent = await classifier.classify(text_content or "", session_context=session)
+
+        # If the message looks like an order number (#NNNN) and the customer has
+        # a pending order, skip the classifier and go straight to ORDER_CONFIRM.
+        if re.search(r"#\d{3,}", text_content or "") and await _has_pending_order(db, tenant.id, customer.id):
+            intent = Intent.ORDER_CONFIRM
+        else:
+            intent = await classifier.classify(text_content or "", session_context=session)
         log.info("Classified intent: %s", intent)
 
         if intent == Intent.ORDER_CONFIRM or session.get("current_flow") == "ORDER_CONFIRM":
@@ -224,6 +232,22 @@ def _extract_text_and_meta(msg: dict[str, Any], msg_type: str) -> tuple[str, dic
         image = msg.get("image") or {}
         return image.get("caption") or "", {"type": "image", "media_id": image.get("id", "")}
     return "", {"type": msg_type}
+
+
+async def _has_pending_order(db: AsyncSession, tenant_id: int, customer_id: int) -> bool:
+    """Return True if the customer has any PENDING/AWAITING_PAYMENT/AWAITING_RECEIPT order."""
+    result = await db.execute(
+        select(Order.id).where(
+            Order.tenant_id == tenant_id,
+            Order.customer_id == customer_id,
+            Order.status.in_([
+                OrderStatus.PENDING,
+                OrderStatus.AWAITING_PAYMENT,
+                OrderStatus.AWAITING_RECEIPT,
+            ]),
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def _is_ai_paused(db: AsyncSession, tenant_id: int, customer_id: int) -> bool:

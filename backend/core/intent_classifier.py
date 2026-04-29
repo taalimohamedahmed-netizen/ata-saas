@@ -60,6 +60,16 @@ _KEYWORDS: dict[Intent, list[str]] = {
         r"\binstapay\b",
         r"\bvodafone\s*cash\b",
         r"تأكيد",
+        r"تاكيد",           # without hamza (common Egyptian spelling)
+        r"\bاكد\b",          # imperative verb "confirm"
+        r"\bأكد\b",          # imperative verb with hamza
+        r"عاوز.*اكد",       # "want to confirm"
+        r"عايز.*اكد",
+        r"عاوز.*أكد",
+        r"عايز.*أكد",
+        r"اكدلي",            # "confirm for me"
+        r"اكدلى",
+        r"أكدلي",
         r"إيصال",
         r"ايصال",
         r"دفع",

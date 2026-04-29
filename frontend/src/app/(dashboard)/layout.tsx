@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Bot,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -18,6 +19,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "لوحة التحكم", href: "/dashboard" },
   { icon: MessageSquare, label: "المحادثات", href: "/dashboard/conversations" },
   { icon: ShoppingCart, label: "الطلبات", href: "/dashboard/orders" },
+  { icon: ClipboardCheck, label: "تأكيد الطلبات", href: "/dashboard/order-confirmation" },
   { icon: Users, label: "العملاء", href: "/dashboard/customers" },
   { icon: Settings, label: "الإعدادات", href: "/dashboard/settings/integrations" },
 ];

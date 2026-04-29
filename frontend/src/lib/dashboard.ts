@@ -68,6 +68,32 @@ export const getCustomers = async (
   return res.data;
 };
 
+export interface Product {
+  id: number;
+  shopify_product_id: string;
+  title: string;
+  handle: string | null;
+  vendor: string | null;
+  product_type: string | null;
+  status: string | null;
+  price: number;
+  inventory_qty: number;
+  image_url: string | null;
+  updated_at: string | null;
+}
+
+export const getProducts = async (
+  limit = 25,
+  offset = 0,
+  status?: string,
+  search?: string,
+): Promise<Product[]> => {
+  const res = await api.get("/dashboard/products", {
+    params: { limit, offset, ...(status ? { status } : {}), ...(search ? { search } : {}) },
+  });
+  return res.data;
+};
+
 export const getConversations = async (
   limit = 25,
   offset = 0,

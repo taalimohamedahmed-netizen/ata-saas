@@ -12,6 +12,7 @@ import {
   LogOut,
   Bot,
   ClipboardCheck,
+  Package,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -21,6 +22,7 @@ const navItems = [
   { icon: ShoppingCart, label: "الطلبات", href: "/dashboard/orders" },
   { icon: ClipboardCheck, label: "تأكيد الطلبات", href: "/dashboard/order-confirmation" },
   { icon: Users, label: "العملاء", href: "/dashboard/customers" },
+  { icon: Package, label: "المنتجات", href: "/dashboard/products" },
   { icon: Settings, label: "الإعدادات", href: "/dashboard/settings/integrations" },
 ];
 

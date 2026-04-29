@@ -24,6 +24,7 @@ from core.database import get_db
 from models.conversation import Conversation
 from models.customer import Customer, CustomerSegment
 from models.order import Order, OrderStatus
+from models.product import Product
 from models.tenant import Tenant
 
 router = APIRouter()
@@ -153,6 +154,44 @@ async def list_customers(
             "created_at": c.created_at.isoformat() if c.created_at else None,
         }
         for c in rows.scalars().all()
+    ]
+
+
+# ============================================================
+# Products
+# ============================================================
+@router.get("/products")
+async def list_products(
+    limit: int = Query(default=25, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+) -> list[dict[str, Any]]:
+    stmt = select(Product).where(Product.tenant_id == tenant.id)
+    if status:
+        stmt = stmt.where(Product.status == status)
+    if search:
+        stmt = stmt.where(Product.title.ilike(f"%{search}%"))
+    stmt = stmt.order_by(desc(Product.updated_at)).offset(offset).limit(limit)
+
+    rows = await db.execute(stmt)
+    return [
+        {
+            "id": p.id,
+            "shopify_product_id": p.shopify_product_id,
+            "title": p.title,
+            "handle": p.handle,
+            "vendor": p.vendor,
+            "product_type": p.product_type,
+            "status": p.status,
+            "price": p.price,
+            "inventory_qty": p.inventory_qty,
+            "image_url": p.image_url,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        }
+        for p in rows.scalars().all()
     ]
 
 

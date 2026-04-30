@@ -65,13 +65,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[var(--c-navy)]" dir={dir}>
       {/* ═══════ SIDEBAR ═══════ */}
-      <aside className="flex w-16 flex-col items-center border-border bg-[var(--c-navy-light)] py-4 lg:w-56 lg:items-stretch lg:px-3"
-        style={{ borderInlineEndWidth: 1, borderInlineEndStyle: "solid" }}>
+      <aside
+        className="flex w-16 flex-col items-center py-4 lg:w-56 lg:items-stretch lg:px-3"
+        style={{
+          background: "rgba(255,255,255,0.02)",
+          backdropFilter: "blur(24px)",
+          borderInlineEndWidth: 1,
+          borderInlineEndStyle: "solid",
+          borderInlineEndColor: "rgba(255,255,255,0.07)",
+          boxShadow: "4px 0 24px rgba(0,0,0,0.2)",
+        }}
+      >
 
         {/* Logo */}
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 lg:w-full lg:gap-3 lg:px-3 mb-6">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-xl lg:w-full lg:gap-3 lg:px-3 mb-6 transition-all duration-300"
+          style={{
+            background: "linear-gradient(135deg, rgba(50,120,232,0.25), rgba(50,120,232,0.10))",
+            boxShadow: "0 4px 16px rgba(50,120,232,0.25), inset 0 1px 0 rgba(255,255,255,0.15)",
+            border: "1px solid rgba(50,120,232,0.30)",
+          }}
+        >
           <Bot className="h-5 w-5 text-accent shrink-0" />
-          <span className="hidden lg:block text-lg font-extrabold text-[var(--c-text)] tracking-tight"
+          <span className="hidden lg:block text-lg font-extrabold text-white tracking-tight"
             style={{ fontFamily: '"Poppins", sans-serif' }}>
             ATA
           </span>
@@ -81,11 +97,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex flex-1 flex-col gap-0.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-            const base = "flex h-10 w-10 items-center justify-center rounded-lg transition-colors lg:w-full lg:gap-3 lg:px-3 lg:justify-start";
-            const active = "bg-accent/15 text-accent";
-            const inactive = "text-muted hover:bg-[var(--c-hover)] hover:text-[var(--c-text)]";
+            const base = "flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-200 lg:w-full lg:gap-3 lg:px-3 lg:justify-start";
+            const active = "text-accent";
+            const inactive = "text-muted hover:text-[var(--c-text)]";
             return (
-              <Link key={item.href} href={item.href} className={`${base} ${isActive ? active : inactive}`} title={item.label}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`${base} ${isActive ? active : inactive}`}
+                title={item.label}
+                style={isActive ? {
+                  background: "rgba(50,120,232,0.12)",
+                  boxShadow: "0 2px 12px rgba(50,120,232,0.15), inset 0 1px 0 rgba(50,120,232,0.20)",
+                  border: "1px solid rgba(50,120,232,0.20)",
+                } : {}}
+              >
                 <item.icon className="h-5 w-5 shrink-0" />
                 <span className="hidden lg:block text-sm" style={{ fontFamily }}>{item.label}</span>
               </Link>

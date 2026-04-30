@@ -3,7 +3,7 @@
 
 @import "tailwindcss";
 
-/* ─── Design Tokens (dynamic — override per theme) ─── */
+/* ─── Design Tokens ─── */
 @theme {
   --color-navy:        var(--c-navy);
   --color-navy-light:  var(--c-navy-light);
@@ -12,8 +12,8 @@
   --color-border:      var(--c-border);
   --color-muted:       var(--c-muted);
   --color-text:        var(--c-text);
-  --color-accent:      #3278E8;
-  --color-accent-hover:#1E5FCC;
+  --color-accent:      #C6F135;
+  --color-accent-hover:#B5DC10;
   --color-danger:      #EF4444;
   --color-success:     #22C55E;
   --color-gold:        #F59E0B;
@@ -26,15 +26,15 @@
 
 /* ─── Dark Theme (default) ─── */
 :root {
-  --c-navy:       #0A0F1E;
-  --c-navy-light: #0F172A;
-  --c-navy-card:  #121826;
-  --c-surface:    #1A2336;
-  --c-border:     rgba(30, 59, 138, 0.5);
-  --c-muted:      #9EB4CC;
+  --c-navy:       #0D0D0D;
+  --c-navy-light: #141414;
+  --c-navy-card:  #1A1A1A;
+  --c-surface:    #1C1C1C;
+  --c-border:     #272727;
+  --c-muted:      #888888;
   --c-text:       #FFFFFF;
-  --c-text-sub:   #9EB4CC;
-  --c-input-bg:   rgba(255,255,255,0.06);
+  --c-text-sub:   #888888;
+  --c-input-bg:   rgba(255,255,255,0.07);
   --c-hover:      rgba(255,255,255,0.05);
 }
 
@@ -49,24 +49,18 @@ html:not(.dark) {
   --c-text:       #0A0F1E;
   --c-text-sub:   #4A6B8A;
   --c-input-bg:   rgba(0,0,0,0.04);
-  --c-hover:      rgba(50, 120, 232, 0.06);
+  --c-hover:      rgba(198,241,53,0.08);
 }
 
 /* ─── Font per language ─── */
 html[lang="ar"] body { font-family: var(--font-arabic); }
 html[lang="en"] body { font-family: var(--font-sans); }
-html[lang="ar"] h1,
-html[lang="ar"] h2,
-html[lang="ar"] h3 { font-family: var(--font-arabic); }
-html[lang="en"] h1,
-html[lang="en"] h2,
-html[lang="en"] h3 { font-family: var(--font-heading); }
+html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3 { font-family: var(--font-arabic); }
+html[lang="en"] h1, html[lang="en"] h2, html[lang="en"] h3 { font-family: var(--font-heading); }
 
 /* ─── Base ─── */
 *, *::before, *::after { box-sizing: border-box; }
-
 html { height: 100%; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
 body {
   min-height: 100%;
   margin: 0;
@@ -81,10 +75,10 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 9999px; }
 
 /* ─── Focus ─── */
-:focus-visible { outline: 2px solid #3278E8; outline-offset: 2px; }
+:focus-visible { outline: 2px solid #C6F135; outline-offset: 2px; }
 
 /* ─── Selection ─── */
-::selection { background: rgba(50, 120, 232, 0.25); color: var(--c-text); }
+::selection { background: rgba(198,241,53,0.20); color: var(--c-text); }
 
 /* ─── Auth gradient ─── */
 @keyframes gradient-shift {
@@ -99,5 +93,5 @@ body {
 
 /* ─── Glow ─── */
 .glow-accent {
-  box-shadow: 0 0 20px rgba(50,120,232,0.15), 0 0 60px rgba(50,120,232,0.05);
+  box-shadow: 0 0 20px rgba(198,241,53,0.15), 0 0 60px rgba(198,241,53,0.05);
 }

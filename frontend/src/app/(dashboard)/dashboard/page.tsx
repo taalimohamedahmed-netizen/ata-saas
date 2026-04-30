@@ -2,52 +2,34 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ShoppingCart, Users, TrendingUp, CheckCircle2, ArrowRight, Package, MessageSquare } from "lucide-react";
+import {
+  ShoppingCart, Users, TrendingUp, CheckCircle2,
+  MoreVertical, ArrowUpRight, Package, MessageSquare,
+  Calendar, ChevronDown,
+} from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { getStats, type DashboardStats } from "@/lib/dashboard";
 import { useI18n } from "@/context/i18n-context";
 
-function StatCard({ icon: Icon, label, value, sub, href, glowColor }: {
-  icon: React.ElementType; label: string; value: string | number;
-  sub?: string; href?: string; glowColor: string;
-}) {
-  const { fontFamily } = useI18n();
-
-  const card = (
-    <div
-      className={`relative rounded-2xl p-5 space-y-4 overflow-hidden transition-all duration-300 ${href ? "hover:-translate-y-1.5 hover:scale-[1.02] cursor-pointer" : ""}`}
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        backdropFilter: "blur(24px)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: `0 24px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(255,255,255,0.02)`,
-      }}
-    >
-      {/* Top accent line */}
-      <div className="absolute top-0 inset-x-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${glowColor}80, transparent)` }} />
-
-      {/* Ambient glow orb */}
-      <div
-        className="absolute -top-8 -right-8 h-24 w-24 rounded-full blur-2xl pointer-events-none"
-        style={{ background: glowColor, opacity: 0.15 }}
-      />
-
-      <div
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl"
-        style={{ background: `${glowColor}1A`, boxShadow: `0 4px 16px ${glowColor}30, inset 0 1px 0 ${glowColor}20` }}
-      >
-        <Icon className="h-5 w-5" style={{ color: glowColor }} />
-      </div>
-
-      <div className="relative">
-        <p className="text-2xl font-bold text-white tracking-tight">{value}</p>
-        <p className="text-sm text-muted mt-0.5" style={{ fontFamily }}>{label}</p>
-        {sub && <p className="text-xs mt-1.5 font-medium" style={{ color: glowColor, fontFamily }}>{sub}</p>}
-      </div>
+/* ─── shared card shell ─── */
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl p-5 ${className}`} style={{ background: "#1A1A1A" }}>
+      {children}
     </div>
   );
+}
 
-  return href ? <Link href={href}>{card}</Link> : card;
+/* ─── card header row ─── */
+function CardHeader({ title, fontFamily }: { title: string; fontFamily: string }) {
+  return (
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-sm" style={{ color: "#888", fontFamily }}>{title}</span>
+      <button className="p-1 rounded-lg hover:bg-white/5 transition-colors">
+        <MoreVertical className="h-4 w-4" style={{ color: "#444" }} />
+      </button>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -57,118 +39,325 @@ export default function DashboardPage() {
 
   useEffect(() => { getStats().then(setStats).catch(() => {}); }, []);
 
-  const fmt = (n: number | undefined) => n === undefined ? "—" : fmtNum(n);
+  const fmt = (n?: number) => (n === undefined ? "—" : fmtNum(n));
   const currency = t("common", "currency");
 
-  const quickLinks = [
-    { icon: ShoppingCart,  label: t("dashboard", "viewOrders"),    sub: t("dashboard", "viewOrdersSub"),    href: "/dashboard/orders",        glow: "#3278E8" },
-    { icon: Users,         label: t("dashboard", "viewCustomers"), sub: t("dashboard", "viewCustomersSub"), href: "/dashboard/customers",     glow: "#A855F7" },
-    { icon: Package,       label: t("nav", "products"),            sub: "",                                  href: "/dashboard/products",      glow: "#F59E0B" },
-    { icon: MessageSquare, label: t("nav", "conversations"),       sub: "",                                  href: "/dashboard/conversations", glow: "#22C55E" },
+  const total     = stats?.total_orders     ?? 0;
+  const confirmed = stats?.confirmed_orders ?? 0;
+  const pending   = Math.max(total - confirmed, 0);
+  const customers = stats?.total_customers  ?? 0;
+  const vip       = stats?.vip_customers    ?? 0;
+
+  const confirmedPct = total     > 0 ? Math.round((confirmed / total)     * 100) : 0;
+  const pendingPct   = total     > 0 ? Math.round((pending   / total)     * 100) : 0;
+  const vipPct       = customers > 0 ? Math.round((vip       / customers) * 100) : 0;
+
+  const today = new Date().toLocaleDateString(dir === "rtl" ? "ar-EG" : "en-US", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+
+  /* decorative bar-chart data (no time-series API) */
+  const currentMonth = new Date().getMonth();
+  const chartBars = [
+    { l: "Jan", v: 35 }, { l: "Feb", v: 55 }, { l: "Mar", v: 42 },
+    { l: "Apr", v: 70 }, { l: "May", v: 50 }, { l: "Jun", v: 80 },
+    { l: "Jul", v: 60 }, { l: "Aug", v: 45 }, { l: "Sep", v: 90 },
+    { l: "Oct", v: 55 }, { l: "Nov", v: 38 }, { l: "Dec", v: 25 },
   ];
+  const maxBar = 90;
+
+  /* customer dot grid */
+  const DOTS      = 40;
+  const filled    = stats ? Math.min(Math.round((customers / Math.max(customers + 10, 50)) * DOTS), DOTS) : 0;
+  const vipDots   = Math.min(Math.round((vip / Math.max(customers, 1)) * filled), filled);
 
   return (
-    <div className="min-h-full p-6 space-y-8" dir={dir}>
+    <div className="p-6 space-y-5" dir={dir}>
 
-      {/* ─── Hero ─── */}
-      <div
-        className="relative rounded-3xl p-8 overflow-hidden"
-        style={{
-          background: "linear-gradient(135deg, rgba(50,120,232,0.10) 0%, rgba(10,15,30,0.60) 55%, rgba(168,85,247,0.08) 100%)",
-          border: "1px solid rgba(50,120,232,0.20)",
-          boxShadow: "0 40px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07)",
-        }}
-      >
-        <div className="absolute -top-12 -right-12 w-72 h-72 rounded-full blur-3xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(50,120,232,0.3), transparent 70%)" }} />
-        <div className="absolute bottom-0 left-16 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(168,85,247,0.15), transparent 70%)" }} />
-
-        <div className="relative">
-          <h1 className="text-3xl font-bold text-white leading-tight" style={{ fontFamily }}>
+      {/* ── Page title ── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white" style={{ fontFamily }}>
             {t("dashboard", "greeting")} {tenantName || t("dashboard", "greetingFallback")} 👋
           </h1>
-          <p className="text-muted mt-2 text-sm" style={{ fontFamily }}>
+          <p className="text-sm mt-0.5" style={{ color: "#666", fontFamily }}>
             {t("dashboard", "greetingSub")}
           </p>
         </div>
-      </div>
-
-      {/* ─── Stat Cards ─── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          icon={ShoppingCart}
-          label={t("dashboard", "totalOrders")}
-          value={fmt(stats?.total_orders)}
-          sub={stats ? `${fmt(stats.confirmed_orders)} ${t("dashboard", "confirmedSub")}` : undefined}
-          href="/dashboard/orders"
-          glowColor="#3278E8"
-        />
-        <StatCard
-          icon={CheckCircle2}
-          label={t("dashboard", "confirmedOrders")}
-          value={fmt(stats?.confirmed_orders)}
-          href="/dashboard/orders"
-          glowColor="#22C55E"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label={t("dashboard", "revenue")}
-          value={stats ? `${fmtNum(stats.revenue, { maximumFractionDigits: 0 })} ${currency}` : "—"}
-          glowColor="#F59E0B"
-        />
-        <StatCard
-          icon={Users}
-          label={t("dashboard", "totalCustomers")}
-          value={fmt(stats?.total_customers)}
-          sub={stats ? `${fmt(stats.vip_customers)} ${t("dashboard", "vipSub")}` : undefined}
-          href="/dashboard/customers"
-          glowColor="#A855F7"
-        />
-      </div>
-
-      {/* ─── Quick Access ─── */}
-      <div>
-        <p className="text-xs font-semibold text-muted/60 uppercase tracking-widest mb-4" style={{ fontFamily }}>
-          {t("dashboard", "quickAccess") ?? "Quick Access"}
-        </p>
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {quickLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="group relative rounded-2xl p-4 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02]"
-              style={{
-                background: "rgba(255,255,255,0.025)",
-                backdropFilter: "blur(20px)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                boxShadow: "0 12px 32px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.05)",
-              }}
-            >
-              {/* Hover glow overlay */}
-              <div
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{ background: `radial-gradient(ellipse at 30% 50%, ${item.glow}12, transparent 65%)` }}
-              />
-              <div className="absolute bottom-0 inset-x-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                style={{ background: `linear-gradient(90deg, transparent, ${item.glow}60, transparent)` }} />
-
-              <div className="relative flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110 shrink-0"
-                  style={{ background: `${item.glow}18`, boxShadow: `0 4px 12px ${item.glow}25` }}
-                >
-                  <item.icon className="h-5 w-5" style={{ color: item.glow }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-white text-sm truncate" style={{ fontFamily }}>{item.label}</p>
-                  {item.sub && <p className="text-xs text-muted truncate mt-0.5" style={{ fontFamily }}>{item.sub}</p>}
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted/30 group-hover:text-muted/70 transition-colors shrink-0 rtl:rotate-180" />
-              </div>
-            </Link>
-          ))}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm hidden sm:block" style={{ color: "#666", fontFamily }}>{today}</span>
+          <button
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium text-white"
+            style={{ background: "#1A1A1A", fontFamily }}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+            Today
+          </button>
         </div>
+      </div>
+
+      {/* ══════════════════════════════════
+          TOP STAT CARDS  (3 cols like image)
+          ══════════════════════════════════ */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+
+        {/* ── Card 1: Orders (like Energy Used) ── */}
+        <Card>
+          <CardHeader title={t("dashboard", "totalOrders")} fontFamily={fontFamily} />
+          <p className="text-4xl font-bold text-white leading-none mb-0.5">{fmt(stats?.total_orders)}</p>
+          <p className="text-xs mb-5" style={{ color: "#555", fontFamily }}>{t("dashboard", "greetingSub")}</p>
+
+          {/* Bubble visual */}
+          <div className="relative mb-5" style={{ height: 112 }}>
+            {/* Large lime — confirmed */}
+            <div
+              className="absolute flex flex-col items-center justify-center"
+              style={{ width: 84, height: 84, borderRadius: "50%", background: "#C6F135", top: 0, insetInlineStart: "6%" }}
+            >
+              <span className="text-black font-bold text-xl leading-none">{fmt(stats?.confirmed_orders)}</span>
+              <span className="text-black text-[10px]">confirmed</span>
+            </div>
+            {/* Medium purple — pending */}
+            <div
+              className="absolute flex flex-col items-center justify-center"
+              style={{ width: 64, height: 64, borderRadius: "50%", background: "#8B5CF6", top: 18, insetInlineStart: "42%" }}
+            >
+              <span className="text-white font-bold text-base leading-none">{fmt(pending)}</span>
+              <span className="text-white text-[10px]">pending</span>
+            </div>
+            {/* Small dark — other */}
+            <div
+              className="absolute flex items-center justify-center"
+              style={{ width: 44, height: 44, borderRadius: "50%", background: "#252525", bottom: 0, insetInlineStart: "64%" }}
+            >
+              <span style={{ color: "#555", fontSize: 10 }}>other</span>
+            </div>
+          </div>
+
+          {/* Progress bars */}
+          <div className="space-y-3">
+            {[
+              { label: "Confirmed", pct: confirmedPct, color: "#C6F135" },
+              { label: "Pending",   pct: pendingPct,   color: "#8B5CF6" },
+            ].map(({ label, pct, color }) => (
+              <div key={label}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color, display: "inline-block" }} />
+                    <span className="text-xs" style={{ color: "#666", fontFamily }}>{label}</span>
+                  </div>
+                  <span className="text-xs font-semibold text-white">{pct}%</span>
+                </div>
+                <div className="h-1 rounded-full" style={{ background: "#252525" }}>
+                  <div className="h-1 rounded-full" style={{ background: color, width: `${pct}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* ── Card 2: Revenue (like Heart Rate + Activity) ── */}
+        <Card>
+          <CardHeader title={t("dashboard", "revenue")} fontFamily={fontFamily} />
+          <p className="text-4xl font-bold text-white leading-none mb-0.5">
+            {stats ? fmtNum(stats.revenue, { maximumFractionDigits: 0 }) : "—"}
+          </p>
+          <p className="text-sm mb-1" style={{ color: "#555", fontFamily }}>{currency}</p>
+          <div className="flex items-center gap-1 mb-6">
+            <ArrowUpRight className="h-3.5 w-3.5" style={{ color: "#C6F135" }} />
+            <span className="text-xs font-medium" style={{ color: "#C6F135", fontFamily }}>
+              Avg {stats && confirmed > 0
+                ? fmtNum(stats.revenue / confirmed, { maximumFractionDigits: 0 })
+                : "—"
+              } {currency} / order
+            </span>
+          </div>
+
+          {/* Sub card */}
+          <div className="rounded-xl p-4 space-y-4" style={{ background: "#141414" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: "rgba(198,241,53,0.12)" }}>
+                  <CheckCircle2 className="h-4 w-4" style={{ color: "#C6F135" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{fmt(stats?.confirmed_orders)}</p>
+                  <p className="text-[11px]" style={{ color: "#555", fontFamily }}>
+                    {t("dashboard", "confirmedOrders")}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold" style={{ color: "#C6F135" }}>Active</span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: "rgba(139,92,246,0.12)" }}>
+                  <TrendingUp className="h-4 w-4" style={{ color: "#8B5CF6" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{confirmedPct}%</p>
+                  <p className="text-[11px]" style={{ color: "#555", fontFamily }}>confirm rate</p>
+                </div>
+              </div>
+              <span className="text-xs font-semibold" style={{ color: "#8B5CF6" }}>
+                {fmt(total)} total
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        {/* ── Card 3: Customers (like Wellness Index) ── */}
+        <Card>
+          <CardHeader title={t("dashboard", "totalCustomers")} fontFamily={fontFamily} />
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-4xl font-bold text-white leading-none">{fmt(stats?.total_customers)}</p>
+              <p className="text-xs mt-1" style={{ color: "#555", fontFamily }}>total customers</p>
+            </div>
+            <span
+              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold"
+              style={{ background: "rgba(198,241,53,0.12)", color: "#C6F135" }}
+            >
+              <ArrowUpRight className="h-3 w-3" />
+              +{vipPct}%
+            </span>
+          </div>
+
+          {/* Dot grid */}
+          <div className="grid gap-1.5 mb-4" style={{ gridTemplateColumns: "repeat(8, 1fr)" }}>
+            {Array.from({ length: DOTS }, (_, i) => (
+              <div
+                key={i}
+                className="rounded-full"
+                style={{
+                  width: 8, height: 8,
+                  background: i < vipDots ? "#C6F135" : i < filled ? "rgba(139,92,246,0.45)" : "#252525",
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center gap-5">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#C6F135", display: "inline-block" }} />
+              <span className="text-xs" style={{ color: "#666", fontFamily }}>
+                VIP ({fmt(stats?.vip_customers)})
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#8B5CF6", display: "inline-block" }} />
+              <span className="text-xs" style={{ color: "#666", fontFamily }}>Regular</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* ══════════════════════════════════
+          BOTTOM  (2 cols like image)
+          ══════════════════════════════════ */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+
+        {/* ── Left: Quick Access (like activity breakdown) ── */}
+        <Card className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-5">
+            <span className="text-sm font-semibold text-white" style={{ fontFamily }}>
+              {t("dashboard", "quickAccess")}
+            </span>
+            <button className="p-1 rounded-lg hover:bg-white/5 transition-colors">
+              <MoreVertical className="h-4 w-4" style={{ color: "#444" }} />
+            </button>
+          </div>
+
+          <div className="space-y-5">
+            {[
+              { icon: ShoppingCart,   label: t("dashboard", "viewOrders"),    href: "/dashboard/orders",        color: "#C6F135", pct: confirmedPct },
+              { icon: Users,          label: t("dashboard", "viewCustomers"),  href: "/dashboard/customers",     color: "#8B5CF6", pct: vipPct       },
+              { icon: Package,        label: t("nav", "products"),             href: "/dashboard/products",      color: "#3B82F6", pct: 60           },
+              { icon: MessageSquare,  label: t("nav", "conversations"),        href: "/dashboard/conversations", color: "#F59E0B", pct: 45           },
+            ].map((item) => (
+              <Link key={item.href} href={item.href} className="block group">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <item.icon className="h-4 w-4" style={{ color: item.color }} />
+                    <span className="text-sm text-white" style={{ fontFamily }}>{item.label}</span>
+                  </div>
+                  <span className="text-xs font-bold" style={{ color: item.color }}>{item.pct}%</span>
+                </div>
+                <div className="h-1 rounded-full" style={{ background: "#252525" }}>
+                  <div
+                    className="h-1 rounded-full"
+                    style={{ background: item.color, width: `${item.pct}%`, transition: "width 0.6s ease" }}
+                  />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </Card>
+
+        {/* ── Right: Order Activity bar chart (like Sleep Analysis) ── */}
+        <Card className="lg:col-span-3">
+          <div className="flex items-center justify-between mb-5">
+            <span className="text-sm font-semibold text-white" style={{ fontFamily }}>
+              Order Activity
+            </span>
+            <button
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
+              style={{ background: "#252525", color: "#888", fontFamily }}
+            >
+              Monthly <ChevronDown className="h-3 w-3" />
+            </button>
+          </div>
+
+          {/* Big numbers */}
+          <div className="flex items-center gap-8 mb-6">
+            <div>
+              <p className="text-3xl font-bold text-white">{fmt(stats?.confirmed_orders)}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="h-2 w-2 rounded-full" style={{ background: "#C6F135", display: "inline-block" }} />
+                <span className="text-xs" style={{ color: "#888", fontFamily }}>Confirmed</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-3xl font-bold text-white">{fmt(pending)}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="h-2 w-2 rounded-full" style={{ background: "#8B5CF6", display: "inline-block" }} />
+                <span className="text-xs" style={{ color: "#888", fontFamily }}>Pending</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Bar chart */}
+          <div className="flex items-end gap-1.5" style={{ height: 80 }}>
+            {chartBars.map((bar, i) => {
+              const isActive = i === currentMonth;
+              const barH     = Math.round((bar.v / maxBar) * 72);
+              return (
+                <div key={bar.l} className="flex flex-1 flex-col items-center gap-1.5">
+                  <div
+                    className="w-full rounded-t-md"
+                    style={{
+                      height: barH,
+                      background: isActive
+                        ? "#C6F135"
+                        : i % 2 === 0
+                        ? "#252525"
+                        : "rgba(139,92,246,0.35)",
+                    }}
+                  />
+                  <span
+                    className="text-[9px] leading-none"
+                    style={{ color: isActive ? "#C6F135" : "#3A3A3A", fontFamily }}
+                  >
+                    {bar.l}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
 
     </div>

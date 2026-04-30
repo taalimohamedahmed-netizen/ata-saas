@@ -11,22 +11,25 @@ import { useAuthStore } from "@/store/auth-store";
 import { getStats, type DashboardStats } from "@/lib/dashboard";
 import { useI18n } from "@/context/i18n-context";
 
-/* ─── shared card shell ─── */
+/* ── shared card shell ── */
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl p-5 ${className}`} style={{ background: "#1A1A1A" }}>
+    <div
+      className={`rounded-2xl p-5 ${className}`}
+      style={{ background: "var(--c-navy-card)" }}
+    >
       {children}
     </div>
   );
 }
 
-/* ─── card header row ─── */
+/* ── card header row ── */
 function CardHeader({ title, fontFamily }: { title: string; fontFamily: string }) {
   return (
     <div className="flex items-center justify-between mb-2">
-      <span className="text-sm" style={{ color: "#888", fontFamily }}>{title}</span>
+      <span className="text-sm" style={{ color: "var(--c-muted)", fontFamily }}>{title}</span>
       <button className="p-1 rounded-lg hover:bg-white/5 transition-colors">
-        <MoreVertical className="h-4 w-4" style={{ color: "#444" }} />
+        <MoreVertical className="h-4 w-4" style={{ color: "var(--c-muted)" }} />
       </button>
     </div>
   );
@@ -56,7 +59,7 @@ export default function DashboardPage() {
     day: "numeric", month: "long", year: "numeric",
   });
 
-  /* decorative bar-chart data (no time-series API) */
+  /* decorative monthly bars — no time-series API */
   const currentMonth = new Date().getMonth();
   const chartBars = [
     { l: "Jan", v: 35 }, { l: "Feb", v: 55 }, { l: "Mar", v: 42 },
@@ -67,9 +70,11 @@ export default function DashboardPage() {
   const maxBar = 90;
 
   /* customer dot grid */
-  const DOTS      = 40;
-  const filled    = stats ? Math.min(Math.round((customers / Math.max(customers + 10, 50)) * DOTS), DOTS) : 0;
-  const vipDots   = Math.min(Math.round((vip / Math.max(customers, 1)) * filled), filled);
+  const DOTS   = 40;
+  const filled = stats
+    ? Math.min(Math.round((customers / Math.max(customers + 10, 50)) * DOTS), DOTS)
+    : 0;
+  const vipDots = Math.min(Math.round((vip / Math.max(customers, 1)) * filled), filled);
 
   return (
     <div className="p-6 space-y-5" dir={dir}>
@@ -77,18 +82,20 @@ export default function DashboardPage() {
       {/* ── Page title ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white" style={{ fontFamily }}>
+          <h1 className="text-2xl font-bold" style={{ color: "var(--c-text)", fontFamily }}>
             {t("dashboard", "greeting")} {tenantName || t("dashboard", "greetingFallback")} 👋
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "#666", fontFamily }}>
+          <p className="text-sm mt-0.5" style={{ color: "var(--c-muted)", fontFamily }}>
             {t("dashboard", "greetingSub")}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm hidden sm:block" style={{ color: "#666", fontFamily }}>{today}</span>
+          <span className="text-sm hidden sm:block" style={{ color: "var(--c-muted)", fontFamily }}>
+            {today}
+          </span>
           <button
-            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium text-white"
-            style={{ background: "#1A1A1A", fontFamily }}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-medium"
+            style={{ background: "var(--c-surface)", color: "var(--c-text)", fontFamily }}
           >
             <Calendar className="h-3.5 w-3.5" />
             Today
@@ -96,41 +103,56 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════
-          TOP STAT CARDS  (3 cols like image)
-          ══════════════════════════════════ */}
+      {/* ══ TOP STAT CARDS ══ */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
-        {/* ── Card 1: Orders (like Energy Used) ── */}
+        {/* Card 1 — Orders (bubble chart + progress bars) */}
         <Card>
           <CardHeader title={t("dashboard", "totalOrders")} fontFamily={fontFamily} />
-          <p className="text-4xl font-bold text-white leading-none mb-0.5">{fmt(stats?.total_orders)}</p>
-          <p className="text-xs mb-5" style={{ color: "#555", fontFamily }}>{t("dashboard", "greetingSub")}</p>
 
-          {/* Bubble visual */}
+          <p className="text-4xl font-bold leading-none mb-0.5" style={{ color: "var(--c-text)" }}>
+            {fmt(stats?.total_orders)}
+          </p>
+          <p className="text-xs mb-5" style={{ color: "var(--c-text-sub)", fontFamily }}>
+            {t("dashboard", "greetingSub")}
+          </p>
+
+          {/* Bubbles */}
           <div className="relative mb-5" style={{ height: 112 }}>
             {/* Large lime — confirmed */}
             <div
               className="absolute flex flex-col items-center justify-center"
-              style={{ width: 84, height: 84, borderRadius: "50%", background: "#C6F135", top: 0, insetInlineStart: "6%" }}
+              style={{
+                width: 84, height: 84, borderRadius: "50%", background: "#C6F135",
+                top: 0, insetInlineStart: "6%",
+              }}
             >
-              <span className="text-black font-bold text-xl leading-none">{fmt(stats?.confirmed_orders)}</span>
+              <span className="text-black font-bold text-xl leading-none">
+                {fmt(stats?.confirmed_orders)}
+              </span>
               <span className="text-black text-[10px]">confirmed</span>
             </div>
             {/* Medium purple — pending */}
             <div
               className="absolute flex flex-col items-center justify-center"
-              style={{ width: 64, height: 64, borderRadius: "50%", background: "#8B5CF6", top: 18, insetInlineStart: "42%" }}
+              style={{
+                width: 64, height: 64, borderRadius: "50%", background: "#8B5CF6",
+                top: 18, insetInlineStart: "42%",
+              }}
             >
               <span className="text-white font-bold text-base leading-none">{fmt(pending)}</span>
               <span className="text-white text-[10px]">pending</span>
             </div>
-            {/* Small dark — other */}
+            {/* Small neutral — other */}
             <div
               className="absolute flex items-center justify-center"
-              style={{ width: 44, height: 44, borderRadius: "50%", background: "#252525", bottom: 0, insetInlineStart: "64%" }}
+              style={{
+                width: 44, height: 44, borderRadius: "50%",
+                background: "var(--c-track)",
+                bottom: 0, insetInlineStart: "64%",
+              }}
             >
-              <span style={{ color: "#555", fontSize: 10 }}>other</span>
+              <span className="text-[10px]" style={{ color: "var(--c-muted)" }}>other</span>
             </div>
           </div>
 
@@ -143,12 +165,15 @@ export default function DashboardPage() {
               <div key={label}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color, display: "inline-block" }} />
-                    <span className="text-xs" style={{ color: "#666", fontFamily }}>{label}</span>
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: color, display: "inline-block" }}
+                    />
+                    <span className="text-xs" style={{ color: "var(--c-muted)", fontFamily }}>{label}</span>
                   </div>
-                  <span className="text-xs font-semibold text-white">{pct}%</span>
+                  <span className="text-xs font-semibold" style={{ color: "var(--c-text)" }}>{pct}%</span>
                 </div>
-                <div className="h-1 rounded-full" style={{ background: "#252525" }}>
+                <div className="h-1 rounded-full" style={{ background: "var(--c-track)" }}>
                   <div className="h-1 rounded-full" style={{ background: color, width: `${pct}%` }} />
                 </div>
               </div>
@@ -156,34 +181,40 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* ── Card 2: Revenue (like Heart Rate + Activity) ── */}
+        {/* Card 2 — Revenue */}
         <Card>
           <CardHeader title={t("dashboard", "revenue")} fontFamily={fontFamily} />
-          <p className="text-4xl font-bold text-white leading-none mb-0.5">
+
+          <p className="text-4xl font-bold leading-none mb-0.5" style={{ color: "var(--c-text)" }}>
             {stats ? fmtNum(stats.revenue, { maximumFractionDigits: 0 }) : "—"}
           </p>
-          <p className="text-sm mb-1" style={{ color: "#555", fontFamily }}>{currency}</p>
+          <p className="text-sm mb-1" style={{ color: "var(--c-text-sub)", fontFamily }}>{currency}</p>
           <div className="flex items-center gap-1 mb-6">
             <ArrowUpRight className="h-3.5 w-3.5" style={{ color: "#C6F135" }} />
             <span className="text-xs font-medium" style={{ color: "#C6F135", fontFamily }}>
-              Avg {stats && confirmed > 0
+              Avg{" "}
+              {stats && confirmed > 0
                 ? fmtNum(stats.revenue / confirmed, { maximumFractionDigits: 0 })
-                : "—"
-              } {currency} / order
+                : "—"}{" "}
+              {currency} / order
             </span>
           </div>
 
-          {/* Sub card */}
-          <div className="rounded-xl p-4 space-y-4" style={{ background: "#141414" }}>
+          {/* Inner sub-card */}
+          <div className="rounded-xl p-4 space-y-4" style={{ background: "var(--c-card-inner)" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{ background: "rgba(198,241,53,0.12)" }}>
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: "rgba(198,241,53,0.12)" }}
+                >
                   <CheckCircle2 className="h-4 w-4" style={{ color: "#C6F135" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{fmt(stats?.confirmed_orders)}</p>
-                  <p className="text-[11px]" style={{ color: "#555", fontFamily }}>
+                  <p className="text-sm font-bold" style={{ color: "var(--c-text)" }}>
+                    {fmt(stats?.confirmed_orders)}
+                  </p>
+                  <p className="text-[11px]" style={{ color: "var(--c-muted)", fontFamily }}>
                     {t("dashboard", "confirmedOrders")}
                   </p>
                 </div>
@@ -193,13 +224,19 @@ export default function DashboardPage() {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg"
-                  style={{ background: "rgba(139,92,246,0.12)" }}>
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  style={{ background: "rgba(139,92,246,0.12)" }}
+                >
                   <TrendingUp className="h-4 w-4" style={{ color: "#8B5CF6" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{confirmedPct}%</p>
-                  <p className="text-[11px]" style={{ color: "#555", fontFamily }}>confirm rate</p>
+                  <p className="text-sm font-bold" style={{ color: "var(--c-text)" }}>
+                    {confirmedPct}%
+                  </p>
+                  <p className="text-[11px]" style={{ color: "var(--c-muted)", fontFamily }}>
+                    confirm rate
+                  </p>
                 </div>
               </div>
               <span className="text-xs font-semibold" style={{ color: "#8B5CF6" }}>
@@ -209,13 +246,18 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* ── Card 3: Customers (like Wellness Index) ── */}
+        {/* Card 3 — Customers (dot grid) */}
         <Card>
           <CardHeader title={t("dashboard", "totalCustomers")} fontFamily={fontFamily} />
+
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-4xl font-bold text-white leading-none">{fmt(stats?.total_customers)}</p>
-              <p className="text-xs mt-1" style={{ color: "#555", fontFamily }}>total customers</p>
+              <p className="text-4xl font-bold leading-none" style={{ color: "var(--c-text)" }}>
+                {fmt(stats?.total_customers)}
+              </p>
+              <p className="text-xs mt-1" style={{ color: "var(--c-text-sub)", fontFamily }}>
+                total customers
+              </p>
             </div>
             <span
               className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold"
@@ -233,8 +275,14 @@ export default function DashboardPage() {
                 key={i}
                 className="rounded-full"
                 style={{
-                  width: 8, height: 8,
-                  background: i < vipDots ? "#C6F135" : i < filled ? "rgba(139,92,246,0.45)" : "#252525",
+                  width: 8,
+                  height: 8,
+                  background:
+                    i < vipDots
+                      ? "#C6F135"
+                      : i < filled
+                      ? "rgba(139,92,246,0.45)"
+                      : "var(--c-dot-empty)",
                 }}
               />
             ))}
@@ -242,54 +290,66 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-5">
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: "#C6F135", display: "inline-block" }} />
-              <span className="text-xs" style={{ color: "#666", fontFamily }}>
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "#C6F135", display: "inline-block" }}
+              />
+              <span className="text-xs" style={{ color: "var(--c-muted)", fontFamily }}>
                 VIP ({fmt(stats?.vip_customers)})
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: "#8B5CF6", display: "inline-block" }} />
-              <span className="text-xs" style={{ color: "#666", fontFamily }}>Regular</span>
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: "#8B5CF6", display: "inline-block" }}
+              />
+              <span className="text-xs" style={{ color: "var(--c-muted)", fontFamily }}>Regular</span>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* ══════════════════════════════════
-          BOTTOM  (2 cols like image)
-          ══════════════════════════════════ */}
+      {/* ══ BOTTOM 2-COL ══ */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
 
-        {/* ── Left: Quick Access (like activity breakdown) ── */}
+        {/* Quick Access — progress bars */}
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between mb-5">
-            <span className="text-sm font-semibold text-white" style={{ fontFamily }}>
+            <span className="text-sm font-semibold" style={{ color: "var(--c-text)", fontFamily }}>
               {t("dashboard", "quickAccess")}
             </span>
             <button className="p-1 rounded-lg hover:bg-white/5 transition-colors">
-              <MoreVertical className="h-4 w-4" style={{ color: "#444" }} />
+              <MoreVertical className="h-4 w-4" style={{ color: "var(--c-muted)" }} />
             </button>
           </div>
 
           <div className="space-y-5">
             {[
-              { icon: ShoppingCart,   label: t("dashboard", "viewOrders"),    href: "/dashboard/orders",        color: "#C6F135", pct: confirmedPct },
-              { icon: Users,          label: t("dashboard", "viewCustomers"),  href: "/dashboard/customers",     color: "#8B5CF6", pct: vipPct       },
-              { icon: Package,        label: t("nav", "products"),             href: "/dashboard/products",      color: "#3B82F6", pct: 60           },
-              { icon: MessageSquare,  label: t("nav", "conversations"),        href: "/dashboard/conversations", color: "#F59E0B", pct: 45           },
+              { icon: ShoppingCart,  label: t("dashboard", "viewOrders"),   href: "/dashboard/orders",        color: "#C6F135", pct: confirmedPct },
+              { icon: Users,         label: t("dashboard", "viewCustomers"), href: "/dashboard/customers",     color: "#8B5CF6", pct: vipPct       },
+              { icon: Package,       label: t("nav", "products"),            href: "/dashboard/products",      color: "#3B82F6", pct: 60           },
+              { icon: MessageSquare, label: t("nav", "conversations"),       href: "/dashboard/conversations", color: "#F59E0B", pct: 45           },
             ].map((item) => (
               <Link key={item.href} href={item.href} className="block group">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <item.icon className="h-4 w-4" style={{ color: item.color }} />
-                    <span className="text-sm text-white" style={{ fontFamily }}>{item.label}</span>
+                    <span className="text-sm" style={{ color: "var(--c-text)", fontFamily }}>
+                      {item.label}
+                    </span>
                   </div>
-                  <span className="text-xs font-bold" style={{ color: item.color }}>{item.pct}%</span>
+                  <span className="text-xs font-bold" style={{ color: item.color }}>
+                    {item.pct}%
+                  </span>
                 </div>
-                <div className="h-1 rounded-full" style={{ background: "#252525" }}>
+                <div className="h-1 rounded-full" style={{ background: "var(--c-track)" }}>
                   <div
                     className="h-1 rounded-full"
-                    style={{ background: item.color, width: `${item.pct}%`, transition: "width 0.6s ease" }}
+                    style={{
+                      background: item.color,
+                      width: `${item.pct}%`,
+                      transition: "width 0.6s ease",
+                    }}
                   />
                 </div>
               </Link>
@@ -297,15 +357,15 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* ── Right: Order Activity bar chart (like Sleep Analysis) ── */}
+        {/* Order Activity bar chart */}
         <Card className="lg:col-span-3">
           <div className="flex items-center justify-between mb-5">
-            <span className="text-sm font-semibold text-white" style={{ fontFamily }}>
+            <span className="text-sm font-semibold" style={{ color: "var(--c-text)", fontFamily }}>
               Order Activity
             </span>
             <button
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
-              style={{ background: "#252525", color: "#888", fontFamily }}
+              style={{ background: "var(--c-btn-sec)", color: "var(--c-muted)", fontFamily }}
             >
               Monthly <ChevronDown className="h-3 w-3" />
             </button>
@@ -314,17 +374,25 @@ export default function DashboardPage() {
           {/* Big numbers */}
           <div className="flex items-center gap-8 mb-6">
             <div>
-              <p className="text-3xl font-bold text-white">{fmt(stats?.confirmed_orders)}</p>
+              <p className="text-3xl font-bold" style={{ color: "var(--c-text)" }}>
+                {fmt(stats?.confirmed_orders)}
+              </p>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className="h-2 w-2 rounded-full" style={{ background: "#C6F135", display: "inline-block" }} />
-                <span className="text-xs" style={{ color: "#888", fontFamily }}>Confirmed</span>
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "#C6F135", display: "inline-block" }}
+                />
+                <span className="text-xs" style={{ color: "var(--c-muted)", fontFamily }}>Confirmed</span>
               </div>
             </div>
             <div>
-              <p className="text-3xl font-bold text-white">{fmt(pending)}</p>
+              <p className="text-3xl font-bold" style={{ color: "var(--c-text)" }}>{fmt(pending)}</p>
               <div className="flex items-center gap-1.5 mt-1">
-                <span className="h-2 w-2 rounded-full" style={{ background: "#8B5CF6", display: "inline-block" }} />
-                <span className="text-xs" style={{ color: "#888", fontFamily }}>Pending</span>
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "#8B5CF6", display: "inline-block" }}
+                />
+                <span className="text-xs" style={{ color: "var(--c-muted)", fontFamily }}>Pending</span>
               </div>
             </div>
           </div>
@@ -343,13 +411,16 @@ export default function DashboardPage() {
                       background: isActive
                         ? "#C6F135"
                         : i % 2 === 0
-                        ? "#252525"
+                        ? "var(--c-bar-off)"
                         : "rgba(139,92,246,0.35)",
                     }}
                   />
                   <span
                     className="text-[9px] leading-none"
-                    style={{ color: isActive ? "#C6F135" : "#3A3A3A", fontFamily }}
+                    style={{
+                      color: isActive ? "#C6F135" : "var(--c-label-off)",
+                      fontFamily,
+                    }}
                   >
                     {bar.l}
                   </span>
@@ -359,7 +430,6 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
-
     </div>
   );
 }

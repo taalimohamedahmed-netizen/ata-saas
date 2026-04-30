@@ -18,7 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { isAuthenticated, tenantName, logout } = useAuthStore();
   const { t, locale, dir } = useI18n();
-  const [mounted,   setMounted]   = useState(false);
+  const [mounted,  setMounted]  = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!mounted || !hydrated || !isAuthenticated) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{ background: "#0D0D0D" }}>
+      <div className="flex h-screen items-center justify-center" style={{ background: "var(--c-navy)" }}>
         <div
           className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent"
           style={{ borderColor: "#C6F135", borderTopColor: "transparent" }}
@@ -59,15 +59,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const avatarLetter = (tenantName || "A")[0].toUpperCase();
 
   return (
-    <div className="flex h-screen" dir={dir} style={{ background: "#0D0D0D" }}>
+    <div className="flex h-screen" dir={dir} style={{ background: "var(--c-navy)" }}>
 
       {/* ══════════════ SIDEBAR ══════════════ */}
       <aside
         className="flex w-16 shrink-0 flex-col lg:w-[220px]"
-        style={{ background: "#141414" }}
+        style={{
+          background: "var(--c-navy-light)",
+          borderInlineEnd: "1px solid var(--c-border)",
+        }}
       >
         {/* Logo */}
-        <div className="flex h-[64px] items-center px-3 lg:px-4 shrink-0">
+        <div className="flex h-[64px] shrink-0 items-center px-3 lg:px-4">
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
             style={{ background: "#C6F135" }}
@@ -75,8 +78,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Bot className="h-4 w-4 text-black" />
           </div>
           <span
-            className="hidden lg:block ms-3 text-lg font-bold tracking-tight text-white"
-            style={{ fontFamily: '"Poppins", sans-serif' }}
+            className="hidden lg:block ms-3 text-lg font-bold tracking-tight"
+            style={{ fontFamily: '"Poppins", sans-serif', color: "var(--c-text)" }}
           >
             ATA
           </span>
@@ -94,8 +97,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className="flex h-10 w-10 items-center justify-center rounded-xl transition-all duration-150 lg:w-full lg:justify-start lg:gap-3 lg:px-3"
                 style={
                   isActive
-                    ? { background: "#FFFFFF", color: "#000000" }
-                    : { color: "#666666" }
+                    ? { background: "var(--c-active-bg)", color: "var(--c-active-text)" }
+                    : { color: "var(--c-muted)" }
                 }
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -107,8 +110,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        {/* AI Card */}
-        <div className="hidden lg:block mx-3 mb-3 rounded-2xl p-4"
+        {/* AI Card — desktop only */}
+        <div
+          className="hidden lg:block mx-3 mb-3 rounded-2xl p-4"
           style={{ background: "linear-gradient(135deg, #1E0F3C 0%, #2D1880 100%)" }}
         >
           <div className="text-xl mb-2">🤖</div>
@@ -128,7 +132,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Footer: controls + logout */}
-        <div className="flex items-center justify-between px-3 pb-4 shrink-0">
+        <div
+          className="flex shrink-0 items-center justify-between px-3 pb-4"
+          style={{ borderTop: "1px solid var(--c-border)", paddingTop: 12 }}
+        >
           <div className="hidden lg:block">
             <ControlsBar />
           </div>
@@ -138,7 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button
             onClick={() => { logout(); router.replace("/login"); }}
             className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-red-500/10"
-            style={{ color: "#555" }}
+            style={{ color: "var(--c-muted)" }}
             title={t("nav", "logout")}
           >
             <LogOut className="h-4 w-4" />
@@ -152,7 +159,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ── Top Header ── */}
         <header
           className="flex h-[64px] shrink-0 items-center gap-3 px-5"
-          style={{ background: "#0D0D0D", borderBottom: "1px solid #1A1A1A" }}
+          style={{
+            background: "var(--c-navy)",
+            borderBottom: "1px solid var(--c-border)",
+          }}
         >
           {/* User */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -163,38 +173,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {avatarLetter}
             </div>
             <div className="hidden lg:block min-w-0">
-              <p className="text-sm font-semibold text-white truncate" style={{ fontFamily }}>
+              <p
+                className="text-sm font-semibold truncate"
+                style={{ color: "var(--c-text)", fontFamily }}
+              >
                 {tenantName || t("common", "store")}
               </p>
-              <p className="text-[11px]" style={{ color: "#555", fontFamily }}>ATA Dashboard</p>
+              <p className="text-[11px]" style={{ color: "var(--c-muted)", fontFamily }}>
+                ATA Dashboard
+              </p>
             </div>
-            <ChevronDown className="hidden lg:block h-3.5 w-3.5 shrink-0" style={{ color: "#444" }} />
+            <ChevronDown
+              className="hidden lg:block h-3.5 w-3.5 shrink-0"
+              style={{ color: "var(--c-muted)" }}
+            />
           </div>
 
           {/* Search */}
           <div className="flex-1 max-w-xs mx-auto">
             <div
               className="flex items-center gap-2 rounded-full px-4 py-2"
-              style={{ background: "#1A1A1A", border: "1px solid #252525" }}
+              style={{
+                background: "var(--c-surface)",
+                border: "1px solid var(--c-border)",
+              }}
             >
-              <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "#555" }} />
+              <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--c-muted)" }} />
               <input
                 type="text"
                 placeholder={t("common", "search") + "..."}
-                className="w-full bg-transparent text-sm text-white placeholder:text-[#444] outline-none"
-                style={{ fontFamily }}
+                className="w-full bg-transparent text-sm outline-none placeholder:opacity-40"
+                style={{ color: "var(--c-text)", fontFamily }}
               />
             </div>
           </div>
 
           {/* Controls + Bell */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
             <ControlsBar />
             <button
               className="relative flex h-8 w-8 items-center justify-center rounded-full"
-              style={{ background: "#1A1A1A" }}
+              style={{ background: "var(--c-surface)" }}
             >
-              <Bell className="h-4 w-4" style={{ color: "#777" }} />
+              <Bell className="h-4 w-4" style={{ color: "var(--c-muted)" }} />
               <span
                 className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-black"
                 style={{ background: "#C6F135" }}

@@ -12,29 +12,11 @@ import {
   type Conversation, type CustomerProfile, type CustomerPendingOrder,
 } from "@/lib/dashboard";
 import { toggleConversationAI, sendManualReply } from "@/lib/settings";
-
-// ── Status helpers ───────────────────────────────────────────────────────────
-
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  pending:           { label: "معلق",          cls: "bg-yellow-500/15 text-yellow-400" },
-  awaiting_payment:  { label: "اختيار دفع",   cls: "bg-blue-500/15 text-blue-400" },
-  awaiting_receipt:  { label: "انتظار إيصال", cls: "bg-orange-500/15 text-orange-400" },
-};
-
-const SEGMENT_MAP: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  vip:     { label: "VIP",    cls: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30", icon: <Star className="h-3 w-3" /> },
-  regular: { label: "عادي",  cls: "bg-blue-500/15 text-blue-400 border border-blue-500/30",       icon: <User className="h-3 w-3" /> },
-  new:     { label: "جديد",  cls: "bg-green-500/15 text-green-400 border border-green-500/30",    icon: <TrendingUp className="h-3 w-3" /> },
-};
+import { useI18n } from "@/context/i18n-context";
 
 function initials(name: string | null | undefined, phone: string): string {
   if (name && name.trim()) return name.trim().slice(0, 2);
   return phone.slice(-2);
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("ar-EG", { day: "2-digit", month: "short" });
 }
 
 // ── Conversation card ────────────────────────────────────────────────────────
@@ -42,13 +24,14 @@ function formatDate(iso: string | null) {
 function ConversationCard({
   convo, active, onClick,
 }: { convo: Conversation; active: boolean; onClick: () => void }) {
+  const { t, locale } = useI18n();
   const lastMsg = convo.context?.history_tail?.[convo.context.history_tail.length - 1];
   const date = convo.updated_at ? new Date(convo.updated_at) : null;
 
   return (
     <button
       onClick={onClick}
-      className={`w-full flex flex-col gap-1 border-b border-border p-4 transition-colors text-right ${
+      className={`w-full flex flex-col gap-1 border-b border-border p-4 transition-colors text-end ${
         active ? "bg-accent/10" : "hover:bg-white/5"
       }`}
     >
@@ -56,19 +39,19 @@ function ConversationCard({
         <div className="flex items-center gap-1.5">
           {convo.ai_paused && (
             <span className="rounded-full bg-warning/20 px-1.5 py-0.5 text-[10px] font-bold text-warning uppercase">
-              يدوي
+              {t("conversations", "manual")}
             </span>
           )}
           <span className="text-xs text-muted">
-            {date ? date.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : ""}
+            {date ? date.toLocaleTimeString(locale === "ar" ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit" }) : ""}
           </span>
         </div>
-        <span className="font-semibold text-white">
-          {convo.customer?.name || convo.customer?.phone || "عميل مجهول"}
+        <span className="font-semibold text-[var(--c-text)]">
+          {convo.customer?.name || convo.customer?.phone || t("conversations", "unknownCustomer")}
         </span>
       </div>
-      <p className="text-sm text-muted truncate w-full" dir="rtl">
-        {lastMsg ? lastMsg.content : "بدء محادثة جديدة..."}
+      <p className="text-sm text-muted truncate w-full" dir="auto">
+        {lastMsg ? lastMsg.content : t("conversations", "newConversationHint")}
       </p>
     </button>
   );
@@ -77,21 +60,22 @@ function ConversationCard({
 // ── Chat message ─────────────────────────────────────────────────────────────
 
 function ChatMessage({ msg }: { msg: { role: string; content: string; manual?: boolean } }) {
+  const { t } = useI18n();
   const isBot = msg.role === "assistant" || msg.role === "bot";
   return (
     <div className={`flex w-full ${isBot ? "justify-start" : "justify-end"} mb-4`}>
       <div
         className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
           isBot
-            ? "bg-navy-light border border-border text-white rounded-tr-none"
+            ? "bg-navy-light border border-border text-[var(--c-text)] rounded-tr-none"
             : "bg-accent text-white rounded-tl-none"
         }`}
       >
         <div className="flex items-center gap-1.5 mb-1 opacity-50 text-[10px] uppercase tracking-wider">
           {isBot ? (
-            <><Bot className="h-3 w-3" />{msg.manual ? "رد يدوي" : "ATA AI"}</>
+            <><Bot className="h-3 w-3" />{msg.manual ? t("conversations", "manualReply") : "ATA AI"}</>
           ) : (
-            <><User className="h-3 w-3" /> عميل</>
+            <><User className="h-3 w-3" /> {t("conversations", "customerLabel")}</>
           )}
         </div>
         <p dir="auto">{msg.content}</p>
@@ -111,6 +95,7 @@ function CustomerProfilePanel({
   customerName: string | null | undefined;
   customerPhone: string | undefined;
 }) {
+  const { t, dir, fontFamily, fmtDate, fmtNum, locale } = useI18n();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [pendingOrders, setPendingOrders] = useState<CustomerPendingOrder[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -125,9 +110,7 @@ function CustomerProfilePanel({
     ]).then(([p, o]) => {
       setProfile(p);
       setPendingOrders(o);
-    }).catch(() => {
-      // non-critical — show fallback
-    }).finally(() => setLoadingProfile(false));
+    }).catch(() => {}).finally(() => setLoadingProfile(false));
   }, [customerId]);
 
   const handleConfirm = async (orderId: number) => {
@@ -135,9 +118,9 @@ function CustomerProfilePanel({
     try {
       await confirmOrder(orderId);
       setPendingOrders((prev) => prev.filter((o) => o.id !== orderId));
-      toast.success("✅ تم تأكيد الطلب");
+      toast.success(t("conversations", "confirmSuccess"));
     } catch {
-      toast.error("فشل تأكيد الطلب");
+      toast.error(t("conversations", "confirmFailed"));
     } finally {
       setConfirmingId(null);
     }
@@ -145,18 +128,36 @@ function CustomerProfilePanel({
 
   const phone = profile?.phone || customerPhone || "";
   const name  = profile?.name  || customerName  || null;
-  const seg   = SEGMENT_MAP[profile?.segment ?? ""] ?? SEGMENT_MAP.regular;
+
+  const segmentMap: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+    vip:     { label: t("conversations", "segVip"),     cls: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/30", icon: <Star className="h-3 w-3" /> },
+    regular: { label: t("conversations", "segRegular"), cls: "bg-blue-500/15 text-blue-400 border border-blue-500/30",       icon: <User className="h-3 w-3" /> },
+    new:     { label: t("conversations", "segNew"),     cls: "bg-green-500/15 text-green-400 border border-green-500/30",    icon: <TrendingUp className="h-3 w-3" /> },
+  };
+
+  const statusMap: Record<string, { label: string; cls: string }> = {
+    pending:           { label: t("conversations", "statusPending"),          cls: "bg-yellow-500/15 text-yellow-400" },
+    awaiting_payment:  { label: t("conversations", "statusAwaitingPayment"),  cls: "bg-blue-500/15 text-blue-400" },
+    awaiting_receipt:  { label: t("conversations", "statusAwaitingReceipt"),  cls: "bg-orange-500/15 text-orange-400" },
+  };
+
+  const paymentMap: Record<string, string> = {
+    cod:           t("conversations", "paymentCod"),
+    instapay:      t("conversations", "paymentInstapay"),
+    vodafone_cash: t("conversations", "paymentVodafone"),
+  };
+
+  const seg = segmentMap[profile?.segment ?? ""] ?? segmentMap.regular;
 
   return (
-    <div className="flex w-64 flex-col border-r border-border bg-navy overflow-y-auto" dir="rtl">
-      {/* Avatar + name */}
+    <div className="flex w-64 flex-col border-s border-border bg-navy overflow-y-auto" dir={dir}>
       <div className="p-5 border-b border-border flex flex-col items-center gap-3 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20 text-accent text-xl font-bold">
           {initials(name, phone)}
         </div>
         <div>
-          <p className="font-semibold text-white text-sm" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-            {name || "عميل مجهول"}
+          <p className="font-semibold text-[var(--c-text)] text-sm" style={{ fontFamily }}>
+            {name || t("conversations", "unknownCustomer")}
           </p>
           <p className="text-xs text-muted font-mono mt-0.5" dir="ltr">{phone}</p>
         </div>
@@ -173,83 +174,81 @@ function CustomerProfilePanel({
         </div>
       )}
 
-      {/* Stats */}
       {profile && (
         <div className="p-4 space-y-3 border-b border-border">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">{profile.total_orders}</span>
+            <span className="font-semibold text-[var(--c-text)]">{fmtNum(profile.total_orders)}</span>
             <span className="text-muted flex items-center gap-1">
               <ShoppingBag className="h-3.5 w-3.5" />
-              إجمالي الطلبات
+              {t("conversations", "totalOrders")}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">
-              {profile.total_spent.toLocaleString("en-EG", { minimumFractionDigits: 0 })} ج
+            <span className="font-semibold text-[var(--c-text)]">
+              {fmtNum(profile.total_spent, { minimumFractionDigits: 0 })} {t("common", "currency")}
             </span>
             <span className="text-muted flex items-center gap-1">
               <Banknote className="h-3.5 w-3.5" />
-              إجمالي المصروف
+              {t("conversations", "totalSpent")}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">{formatDate(profile.last_order_date)}</span>
+            <span className="font-semibold text-[var(--c-text)]">{fmtDate(profile.last_order_date, { day: "2-digit", month: "short" })}</span>
             <span className="text-muted flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
-              آخر طلب
+              {t("conversations", "lastOrder")}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">{formatDate(profile.created_at)}</span>
+            <span className="font-semibold text-[var(--c-text)]">{fmtDate(profile.created_at, { day: "2-digit", month: "short" })}</span>
             <span className="text-muted flex items-center gap-1">
               <Phone className="h-3.5 w-3.5" />
-              منضم من
+              {t("conversations", "joinedFrom")}
             </span>
           </div>
         </div>
       )}
 
-      {/* Pending orders */}
       {pendingOrders.length > 0 && (
         <div className="p-4 space-y-3">
-          <p className="text-xs font-bold text-muted uppercase tracking-wider" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-            طلبات تحتاج تأكيد
+          <p className="text-xs font-bold text-muted uppercase tracking-wider" style={{ fontFamily }}>
+            {t("conversations", "pendingOrdersSection")}
           </p>
           {pendingOrders.map((o) => {
-            const s = STATUS_MAP[o.status.toLowerCase()] ?? { label: o.status, cls: "bg-white/10 text-muted" };
+            const s = statusMap[o.status.toLowerCase()] ?? { label: o.status, cls: "bg-white/10 text-muted" };
             return (
               <div key={o.id} className="rounded-xl border border-border bg-surface p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${s.cls}`}>
                     {s.label}
                   </span>
-                  <span className="font-mono text-white text-xs">
+                  <span className="font-mono text-[var(--c-text)] text-xs">
                     {o.shopify_order_number || `#${o.shopify_order_id}`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted">{formatDate(o.created_at)}</span>
-                  <span className="font-semibold text-white" dir="ltr">
-                    {o.total_price.toLocaleString("en-EG", { minimumFractionDigits: 2 })} {o.currency}
+                  <span className="text-muted">{fmtDate(o.created_at, { day: "2-digit", month: "short" })}</span>
+                  <span className="font-semibold text-[var(--c-text)]" dir="ltr">
+                    {fmtNum(o.total_price, { minimumFractionDigits: 2 })} {o.currency}
                   </span>
                 </div>
                 {o.payment_method && (
                   <p className="text-[10px] text-muted">
-                    {{cod: "كاش عند الاستلام", instapay: "إنستا باي", vodafone_cash: "فودافون كاش"}[o.payment_method] ?? o.payment_method}
+                    {paymentMap[o.payment_method] ?? o.payment_method}
                   </p>
                 )}
                 <button
                   onClick={() => handleConfirm(o.id)}
                   disabled={confirmingId === o.id}
                   className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-accent/90 hover:bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors disabled:opacity-50"
-                  style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
+                  style={{ fontFamily }}
                 >
                   {confirmingId === o.id ? (
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <CheckCircle2 className="h-3.5 w-3.5" />
                   )}
-                  تأكيد الطلب
+                  {t("conversations", "confirmOrder")}
                 </button>
               </div>
             );
@@ -258,8 +257,8 @@ function CustomerProfilePanel({
       )}
 
       {profile && pendingOrders.length === 0 && (
-        <div className="p-4 text-center text-xs text-muted" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-          لا توجد طلبات معلقة ✅
+        <div className="p-4 text-center text-xs text-muted" style={{ fontFamily }}>
+          {t("conversations", "noOrders")} ✅
         </div>
       )}
     </div>
@@ -269,6 +268,7 @@ function CustomerProfilePanel({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConversationsPage() {
+  const { t, dir, fontFamily } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -287,7 +287,7 @@ export default function ConversationsPage() {
       setConversations(data);
       if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
     } catch {
-      toast.error("فشل تحميل المحادثات");
+      toast.error(t("conversations", "errorLoad"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -317,9 +317,9 @@ export default function ConversationsPage() {
       setConversations((prev) =>
         prev.map((c) => (c.id === selectedConvo.id ? { ...c, ai_paused: res.ai_paused } : c))
       );
-      toast.success(res.ai_paused ? "🔇 AI متوقف — يمكنك الرد يدوياً" : "🤖 AI شغّال تاني");
+      toast.success(res.ai_paused ? t("conversations", "aiPausedToast") : t("conversations", "aiResumedToast"));
     } catch {
-      toast.error("فشل تغيير حالة الـ AI");
+      toast.error(t("conversations", "aiToggleFailed"));
     } finally {
       setTogglingAI(false);
     }
@@ -339,20 +339,20 @@ export default function ConversationsPage() {
         })
       );
       setManualText("");
-      toast.success("تم إرسال الرسالة ✅");
+      toast.success(t("conversations", "replySent"));
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(detail || "فشل الإرسال");
+      toast.error(detail || t("conversations", "sendFailed"));
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <div className="flex h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border border-border bg-surface m-4" dir="rtl">
+    <div className="flex h-[calc(100vh-2rem)] overflow-hidden rounded-2xl border border-border bg-surface m-4" dir={dir}>
 
       {/* ─── SIDEBAR: conversation list ─── */}
-      <div className="flex w-72 flex-col border-l border-border bg-navy shrink-0">
+      <div className="flex w-72 flex-col border-e border-border bg-navy shrink-0">
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-4">
             <button
@@ -361,19 +361,19 @@ export default function ConversationsPage() {
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
-            <h2 className="text-lg font-bold text-white" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-              المحادثات
+            <h2 className="text-lg font-bold text-[var(--c-text)]" style={{ fontFamily }}>
+              {t("conversations", "title")}
             </h2>
           </div>
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Search className="absolute end-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="text"
-              placeholder="بحث عن عميل..."
+              placeholder={t("conversations", "search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-border bg-navy-light py-2 pr-9 pl-3 text-sm text-white focus:border-accent focus:outline-none"
-              dir="rtl"
+              className="w-full rounded-xl border border-border bg-navy-light py-2 pe-9 ps-3 text-sm text-[var(--c-text)] focus:border-accent focus:outline-none"
+              style={{ fontFamily }}
             />
           </div>
         </div>
@@ -381,12 +381,12 @@ export default function ConversationsPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted">
               <RefreshCw className="h-6 w-6 animate-spin" />
-              <span className="text-xs">جاري التحميل...</span>
+              <span className="text-xs" style={{ fontFamily }}>{t("conversations", "loading")}</span>
             </div>
           ) : filteredConvos.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted px-4 text-center">
               <MessageSquare className="h-8 w-8 opacity-20" />
-              <span className="text-sm">لا توجد محادثات</span>
+              <span className="text-sm" style={{ fontFamily }}>{t("conversations", "empty")}</span>
             </div>
           ) : (
             filteredConvos.map((c) => (
@@ -401,23 +401,23 @@ export default function ConversationsPage() {
         </div>
       </div>
 
-      {/* ─── CHAT WINDOW ─── */}
-      <div className="flex flex-1 flex-col bg-navy-light/30 min-w-0">
+      {/* ─── CHAT WINDOW ─── (dir="ltr" keeps message bubbles on correct physical sides) */}
+      <div className="flex flex-1 flex-col bg-navy-light/30 min-w-0" dir="ltr">
         {selectedConvo ? (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-border bg-navy p-4 px-6">
+            <div className="flex items-center justify-between border-b border-border bg-navy p-4 px-6" dir={dir}>
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleToggleAI}
                   disabled={togglingAI}
-                  title={selectedConvo.ai_paused ? "تشغيل الـ AI" : "إيقاف الـ AI والرد يدوياً"}
+                  title={selectedConvo.ai_paused ? t("conversations", "resumeAI") : t("conversations", "pauseAI")}
                   className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
                     selectedConvo.ai_paused
                       ? "bg-warning/20 text-warning hover:bg-warning/30 border border-warning/30"
                       : "bg-success/10 text-success hover:bg-success/20 border border-success/20"
                   }`}
-                  style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
+                  style={{ fontFamily }}
                 >
                   {togglingAI ? (
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -426,13 +426,13 @@ export default function ConversationsPage() {
                   ) : (
                     <PauseCircle className="h-3.5 w-3.5" />
                   )}
-                  {selectedConvo.ai_paused ? "تشغيل AI" : "إيقاف AI"}
+                  {selectedConvo.ai_paused ? t("conversations", "resumeAI") : t("conversations", "pauseAI")}
                 </button>
               </div>
               <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <h3 className="font-semibold text-white">
-                    {selectedConvo.customer?.name || "عميل مجهول"}
+                <div className="text-end">
+                  <h3 className="font-semibold text-[var(--c-text)]">
+                    {selectedConvo.customer?.name || t("conversations", "unknownCustomer")}
                   </h3>
                   <p className="text-xs text-muted" dir="ltr">{selectedConvo.customer?.phone}</p>
                 </div>
@@ -445,11 +445,11 @@ export default function ConversationsPage() {
             {/* Messages */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-2 scroll-smooth">
               <div className="flex justify-center mb-8">
-                <div className="rounded-lg bg-white/5 px-3 py-1 text-[10px] text-muted flex items-center gap-1.5">
+                <div className="rounded-lg bg-white/5 px-3 py-1 text-[10px] text-muted flex items-center gap-1.5" dir={dir}>
                   <Clock className="h-3 w-3" />
-                  بدأت المحادثة{" "}
+                  {t("conversations", "started")}{" "}
                   {selectedConvo.updated_at
-                    ? new Date(selectedConvo.updated_at).toLocaleDateString("ar-EG")
+                    ? new Date(selectedConvo.updated_at).toLocaleDateString(dir === "rtl" ? "ar-EG" : "en-US")
                     : ""}
                 </div>
               </div>
@@ -459,7 +459,7 @@ export default function ConversationsPage() {
             </div>
 
             {/* Input */}
-            <div className="p-4 bg-navy border-t border-border">
+            <div className="p-4 bg-navy border-t border-border" dir={dir}>
               {selectedConvo.ai_paused ? (
                 <div className="flex items-center gap-3 rounded-2xl border border-warning/40 bg-navy-light px-4 py-2.5">
                   <button
@@ -471,21 +471,21 @@ export default function ConversationsPage() {
                   </button>
                   <input
                     type="text"
-                    placeholder="اكتب ردك هنا..."
+                    placeholder={t("conversations", "messagePlaceholder")}
                     value={manualText}
                     onChange={(e) => setManualText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
-                    className="flex-1 bg-transparent text-sm text-white focus:outline-none text-right placeholder:text-muted"
-                    dir="rtl"
-                    style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}
+                    className="flex-1 bg-transparent text-sm text-[var(--c-text)] focus:outline-none text-end placeholder:text-muted"
+                    dir="auto"
+                    style={{ fontFamily }}
                   />
                   <PauseCircle className="h-5 w-5 text-warning shrink-0" />
                 </div>
               ) : (
                 <div className="flex items-center gap-3 rounded-2xl border border-border bg-navy-light px-4 py-2.5 opacity-50 cursor-not-allowed">
                   <Send className="h-5 w-5 text-muted" />
-                  <span className="flex-1 text-sm text-muted text-right" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-                    المحادثة تدار تلقائياً بالذكاء الاصطناعي — اضغط "إيقاف AI" للرد يدوياً
+                  <span className="flex-1 text-sm text-muted text-end" style={{ fontFamily }}>
+                    {t("conversations", "aiManagedHint")}
                   </span>
                   <Bot className="h-5 w-5 text-success shrink-0" />
                 </div>
@@ -493,12 +493,12 @@ export default function ConversationsPage() {
             </div>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center text-muted gap-4">
+          <div className="flex flex-1 flex-col items-center justify-center text-muted gap-4" dir={dir}>
             <div className="h-20 w-20 rounded-full bg-white/5 flex items-center justify-center">
               <MessageSquare className="h-10 w-10 opacity-20" />
             </div>
-            <p className="text-sm" style={{ fontFamily: '"IBM Plex Sans Arabic", sans-serif' }}>
-              اختر محادثة من القائمة لعرض التفاصيل
+            <p className="text-sm" style={{ fontFamily }}>
+              {t("conversations", "emptySelect")}
             </p>
           </div>
         )}

@@ -22,12 +22,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import (
+    INTERNAL_SECRET,
     create_access_token,
     get_current_tenant,
     hash_password,
     verify_password,
 )
 from core.database import get_db
+from core.encryption import encrypt
 from models.tenant import Tenant, TenantPlan
 
 log = logging.getLogger("ata.routes.auth")
@@ -224,6 +226,73 @@ async def setup_brand(
     await db.commit()
     await db.refresh(tenant)
     return _serialize(tenant)
+
+
+# ============================================================
+# Shopify App Install (called by Remix afterAuth hook)
+# ============================================================
+class ShopifyInstallIn(BaseModel):
+    shop_domain: str = Field(min_length=4, max_length=180)
+    access_token: str = Field(min_length=4)
+    shop_name: str | None = Field(default=None, max_length=120)
+    internal_secret: str  # Must match INTERNAL_SECRET env var
+
+
+class ShopifyInstallOut(BaseModel):
+    tenant_id: int
+    shop: str
+    created: bool
+
+
+@router.post("/shopify-install", response_model=ShopifyInstallOut)
+async def shopify_install(
+    payload: ShopifyInstallIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Called by the Shopify Remix app after a merchant installs or re-installs.
+    Creates or updates the tenant record for this shop.
+    Authenticated by internal_secret (not JWT).
+    """
+    if payload.internal_secret != INTERNAL_SECRET:
+        raise HTTPException(status_code=401, detail="invalid_internal_secret")
+
+    shop = payload.shop_domain.strip().lower()
+    email = f"shopify@{shop}"
+
+    result = await db.execute(
+        select(Tenant).where(Tenant.shopify_domain == shop)
+    )
+    tenant = result.scalar_one_or_none()
+    created = False
+
+    if not tenant:
+        # Check by synthetic email too
+        result2 = await db.execute(select(Tenant).where(Tenant.email == email))
+        tenant = result2.scalar_one_or_none()
+
+    if not tenant:
+        import secrets as secrets_mod
+        tenant = Tenant(
+            name=payload.shop_name or shop,
+            email=email,
+            password_hash=hash_password(secrets_mod.token_hex(32)),
+            plan=TenantPlan.BASIC,
+            shopify_domain=shop,
+        )
+        db.add(tenant)
+        created = True
+
+    tenant.shopify_domain = shop
+    tenant.shopify_token = encrypt(payload.access_token)
+    tenant.is_active = True
+    if payload.shop_name:
+        tenant.name = payload.shop_name
+
+    await db.commit()
+    await db.refresh(tenant)
+    log.info("Shopify install/re-install shop=%s tenant=%s created=%s", shop, tenant.id, created)
+    return ShopifyInstallOut(tenant_id=tenant.id, shop=shop, created=created)
 
 
 @router.post("/setup/payments", response_model=TenantOut)

@@ -1,0 +1,29 @@
+name = "ATA - WhatsApp Inbox"
+client_id = "24e1b82bb78aa043611ab6343f1ba96c"
+application_url = "https://shopify-app.ataproject.cloud"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = ""
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "read_orders,write_orders,read_products,write_products,read_customers,write_customers"
+
+[auth]
+redirect_urls = [
+  "https://shopify-app.ataproject.cloud/auth/callback",
+  "https://shopify-app.ataproject.cloud/auth/shopify/callback",
+  "https://shopify-app.ataproject.cloud/exitiframe",
+]
+
+[webhooks]
+api_version = "2024-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/webhooks"
+
+[pos]
+embedded = false

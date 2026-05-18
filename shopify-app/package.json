@@ -1,0 +1,42 @@
+{
+  "name": "ata-shopify-app",
+  "private": true,
+  "scripts": {
+    "build": "remix vite:build",
+    "dev": "shopify app dev",
+    "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
+    "shopify": "shopify",
+    "start": "remix-serve ./build/server/index.js",
+    "setup": "prisma generate && prisma migrate deploy",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@remix-run/node": "^2.15.0",
+    "@remix-run/react": "^2.15.0",
+    "@remix-run/serve": "^2.15.0",
+    "@shopify/app-bridge-react": "^4.1.6",
+    "@shopify/polaris": "^13.9.5",
+    "@shopify/shopify-app-remix": "^3.5.0",
+    "@shopify/shopify-app-session-storage-prisma": "^5.1.4",
+    "isbot": "^5.1.17",
+    "prisma": "^5.20.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@remix-run/dev": "^2.15.0",
+    "@shopify/cli": "3.94.3",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.8",
+    "vite-tsconfig-paths": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=18.20.0"
+  },
+  "workspaces": [
+    "extensions/*"
+  ]
+}

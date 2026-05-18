@@ -115,6 +115,89 @@ async def toggle_ai(
     return {"id": conversation_id, "ai_paused": convo.ai_paused}
 
 
+# ============================================================
+# Shopify App — Tenant settings endpoints
+# (identified via X-Shop-Token instead of JWT)
+# ============================================================
+
+class ShopifyTenantOut(BaseModel):
+    whatsapp_connected: bool
+    whatsapp_phone_number: str | None
+    whatsapp_phone_id: str | None
+    whatsapp_waba_id: str | None
+    whatsapp_verify_token: str | None
+    brand_name: str | None
+    brand_tone: str | None
+    brand_policies: str | None
+    ai_enabled: bool
+
+
+@router.get("/shopify-tenant", response_model=ShopifyTenantOut)
+async def get_shopify_tenant_settings(
+    tenant: Tenant = Depends(get_current_tenant),
+) -> ShopifyTenantOut:
+    return ShopifyTenantOut(
+        whatsapp_connected=bool(tenant.whatsapp_token and tenant.whatsapp_phone_id),
+        whatsapp_phone_number=tenant.whatsapp_phone_number,
+        whatsapp_phone_id=tenant.whatsapp_phone_id,
+        whatsapp_waba_id=tenant.whatsapp_waba_id,
+        whatsapp_verify_token=tenant.whatsapp_verify_token,
+        brand_name=tenant.brand_name,
+        brand_tone=tenant.brand_tone,
+        brand_policies=tenant.brand_policies,
+        ai_enabled=True,
+    )
+
+
+class WhatsAppSettingsIn(BaseModel):
+    waba_id: str = Field(min_length=1, max_length=50)
+    phone_id: str = Field(min_length=1, max_length=120)
+    phone_number: str = Field(min_length=1, max_length=30)
+    access_token: str | None = Field(default=None)
+
+
+@router.post("/shopify-tenant/whatsapp")
+async def save_shopify_whatsapp(
+    payload: WhatsAppSettingsIn,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    import secrets as secrets_mod
+    tenant.whatsapp_waba_id = payload.waba_id.strip()
+    tenant.whatsapp_phone_id = payload.phone_id.strip()
+    tenant.whatsapp_phone_number = payload.phone_number.strip()
+    if payload.access_token:
+        tenant.whatsapp_token = encrypt(payload.access_token.strip())
+    if not tenant.whatsapp_verify_token:
+        tenant.whatsapp_verify_token = secrets_mod.token_hex(24)
+    await db.commit()
+    log.info("WhatsApp settings saved via Shopify app tenant=%s", tenant.id)
+    return {"ok": True, "verify_token": tenant.whatsapp_verify_token}
+
+
+class BrandSettingsIn(BaseModel):
+    brand_name: str | None = Field(default=None, max_length=120)
+    brand_tone: str | None = Field(default=None, max_length=255)
+    brand_policies: str | None = Field(default=None)
+
+
+@router.post("/shopify-tenant/brand")
+async def save_shopify_brand(
+    payload: BrandSettingsIn,
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    if payload.brand_name is not None:
+        tenant.brand_name = payload.brand_name
+    if payload.brand_tone is not None:
+        tenant.brand_tone = payload.brand_tone
+    if payload.brand_policies is not None:
+        tenant.brand_policies = payload.brand_policies
+    await db.commit()
+    log.info("Brand settings saved via Shopify app tenant=%s", tenant.id)
+    return {"ok": True}
+
+
 @router.post("/conversations/{conversation_id}/reply")
 async def manual_reply(
     conversation_id: int,

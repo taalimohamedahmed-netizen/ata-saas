@@ -16,8 +16,13 @@ by `request.state.tenant_id` (or use the Tenant returned by
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac as hmac_lib
+import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -41,6 +46,9 @@ JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
 
+# Shared secret between Shopify Remix app and this backend.
+INTERNAL_SECRET = os.getenv("INTERNAL_SECRET", "change-me-internal")
+
 # Routes that do NOT require a valid JWT.
 # Webhook routes embed tenant_id in the URL and validate via secret instead.
 PUBLIC_PREFIXES: tuple[str, ...] = (
@@ -51,12 +59,52 @@ PUBLIC_PREFIXES: tuple[str, ...] = (
     "/openapi.json",
     "/auth/register",
     "/auth/login",
-    "/webhook/",  # tenant_id is in URL; signature checked in route
-    "/integrations/shopify/oauth/callback",  # Shopify redirects here — no JWT
+    "/auth/shopify-install",   # Called by Remix afterAuth hook
+    "/webhook/",               # tenant_id in URL; signature checked in route
+    "/integrations/shopify/oauth/callback",
 )
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+# --------------------------------------------------------------------------
+# Shopify App token (server-to-server HMAC)
+# --------------------------------------------------------------------------
+def verify_shop_token(token: str) -> str | None:
+    """
+    Verify the X-Shop-Token signed by the Remix backend.
+    Returns the shop domain if valid, None otherwise.
+
+    Token format (base64url): JSON { "data": "<json string>", "sig": "<hex>" }
+    Data JSON: { "shop": "<domain>", "iat": <unix ts> }
+    Signed with HMAC-SHA256(INTERNAL_SECRET, data).
+    """
+    try:
+        # base64url may omit padding
+        padding = 4 - len(token) % 4
+        decoded = base64.urlsafe_b64decode(token + "=" * (padding % 4))
+        obj = json.loads(decoded)
+        data: str = obj["data"]
+        sig: str = obj["sig"]
+
+        expected = hmac_lib.new(
+            INTERNAL_SECRET.encode(),
+            data.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+
+        if not hmac_lib.compare_digest(sig, expected):
+            return None
+
+        payload = json.loads(data)
+        iat = payload.get("iat", 0)
+        if abs(time.time() - iat) > 300:   # 5-minute window
+            return None
+
+        return payload.get("shop")
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -129,6 +177,38 @@ class TenantMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS" or _is_public_path(path):
             return await call_next(request)
 
+        # ── Path 1: Shopify App server-to-server token ──────────────────────
+        shop_token = request.headers.get("X-Shop-Token")
+        shop_domain = request.headers.get("X-Shop-Domain")
+        if shop_token and shop_domain:
+            verified_shop = verify_shop_token(shop_token)
+            if not verified_shop or verified_shop != shop_domain:
+                return JSONResponse(
+                    {"error": "invalid_shop_token"},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+            # Resolve shop → tenant_id via DB
+            from core.database import SessionLocal
+            from models.tenant import Tenant as TenantModel
+            async with SessionLocal() as db:
+                result = await db.execute(
+                    select(TenantModel).where(
+                        TenantModel.shopify_domain == shop_domain,
+                        TenantModel.is_active == True,  # noqa: E712
+                    )
+                )
+                tenant = result.scalar_one_or_none()
+
+            if not tenant:
+                return JSONResponse(
+                    {"error": "shop_not_installed", "shop": shop_domain},
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                )
+            request.state.tenant_id = tenant.id
+            request.state.shop_domain = shop_domain
+            return await call_next(request)
+
+        # ── Path 2: Standard JWT Bearer token ───────────────────────────────
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.lower().startswith("bearer "):
             return JSONResponse(

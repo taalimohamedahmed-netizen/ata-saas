@@ -1,11 +1,13 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { login } from "../../shopify.server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
+import polarisTranslations from "@shopify/polaris/locales/en.json";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  return { polarisTranslations: require("@shopify/polaris/locales/en.json"), shop: url.searchParams.get("shop") };
+  return json({ shop: url.searchParams.get("shop") });
 }
 
 type ActionErrors = { errors: Record<string, string> };
@@ -25,7 +27,7 @@ export default function Auth() {
   const errors = actionData?.errors ?? {};
 
   return (
-    <AppProvider isEmbeddedApp apiKey={process.env.SHOPIFY_API_KEY || ""} i18n={loaderData.polarisTranslations}>
+    <AppProvider isEmbeddedApp apiKey={process.env.SHOPIFY_API_KEY || ""} i18n={polarisTranslations}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#f4f6f8" }}>
         <div style={{ background: "white", padding: 40, borderRadius: 12, boxShadow: "0 2px 12px rgba(0,0,0,0.1)", width: 400 }}>
           <h1 style={{ marginBottom: 8, fontSize: 24, fontWeight: 700 }}>ATA — WhatsApp Inbox</h1>
